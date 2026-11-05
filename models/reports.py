@@ -185,12 +185,18 @@ def class_occupancy(conn, travel_date):
     rows = conn.execute(
         """
         SELECT c.class_code,
-               COUNT(DISTINCT c.id) AS coaches,
+               COUNT(*) AS coaches,
                COALESCE(SUM(c.seat_count), 0) AS seats,
-               COUNT(DISTINCT CASE WHEN si.status = 'booked' THEN si.seat_id END) AS booked
+               (
+                   SELECT COUNT(DISTINCT si.seat_id)
+                   FROM seats s
+                   JOIN coaches cc ON cc.id = s.coach_id
+                   JOIN seat_inventory si ON si.seat_id = s.id
+                   WHERE cc.class_code = c.class_code
+                     AND si.travel_date = ?
+                     AND si.status = 'booked'
+               ) AS booked
         FROM coaches c
-        LEFT JOIN seats s ON s.coach_id = c.id
-        LEFT JOIN seat_inventory si ON si.seat_id = s.id AND si.travel_date = ?
         GROUP BY c.class_code
         ORDER BY c.class_code
         """,
