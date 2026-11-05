@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}REST API{% endblock %}
+
+{% block content %}
+<h1>REST API</h1>
+<p class="muted">All endpoints return JSON. Base URL: <code>{{ request.url_root }}api</code></p>
+
+<div class="card">
+    <h2>GET /api/stations?q=del</h2>
+    <p>Search the station master by city, name or code.</p>
+    <pre>{"stations": [{"code": "NDLS", "name": "New Delhi", "city": "Delhi"}]}</pre>
+</div>
+
+<div class="card">
+    <h2>GET /api/trains</h2>
+    <p>List every seeded train with its number and name.</p>
+    <pre>{"trains": [{"id": 1, "train_number": "12951", "train_name": "Mumbai Rajdhani Express"}]}</pre>
+</div>
+
+<div class="card">
+    <h2>GET /api/search?from=Mumbai&amp;to=Delhi</h2>
+    <p>Find trains between two cities with live distance and duration.</p>
+    <pre>{"count": 1, "results": [{"train_number": "12951", "distance_km": 1386, "duration": "15h 35m"}]}</pre>
+</div>
+
+<div class="card">
+    <h2>GET /api/availability</h2>
+    <p>Query parameters: <code>train_id, class, date, from_seq, to_seq</code> and optional <code>quota</code>.</p>
+    <pre>{"available": 72, "fare_per_passenger": 785, "tatkal_open": false}</pre>
+</div>
+
+<div class="card">
+    <h2>POST /api/book</h2>
+    <p>Creates a booking and returns a PNR. If no seats are free the passenger is added to RAC or the waitlist.</p>
+    <pre>{
+  "train_id": 1, "class": "SL", "date": "2026-11-10",
+  "from_seq": 1, "to_seq": 4, "quota": "GN",
+  "user": {"name": "Aarav", "email": "aarav@example.com", "phone": "9876543210"},
+  "passengers": [{"name": "Aarav", "age": 34, "gender": "M", "preference": "LB"}]
+}</pre>
+    <p class="muted">Response: <code>{"pnr": "4021887731", "status": "confirmed"}</code></p>
+</div>
+
+<div class="card">
+    <h2>GET /api/pnr/&lt;pnr&gt;</h2>
+    <p>Full booking record with passengers, payments and refunds.</p>
+</div>
+
+<div class="card">
+    <h2>POST /api/cancel/&lt;pnr&gt;</h2>
+    <p>Cancels a booking, computes the refund and promotes the waitlist.</p>
+    <pre>{"pnr": "4021887731", "cancelled": true, "refund": {"percent": 75, "amount": 1767}}</pre>
+</div>
+
+<div class="card">
+    <h2>Try it</h2>
+    <pre>curl "{{ request.url_root }}api/search?from=Mumbai&amp;to=Delhi"</pre>
+</div>
+{% endblock %}

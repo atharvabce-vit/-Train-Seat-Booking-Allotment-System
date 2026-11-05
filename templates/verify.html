@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Verify {{ pnr }}{% endblock %}
+
+{% block content %}
+<h1>Ticket verification</h1>
+
+{% if record %}
+    {% set b = record.booking %}
+    <div class="card verify-card {% if b.status == 'cancelled' %}invalid{% else %}valid{% endif %}">
+        {% if b.status == 'cancelled' %}
+            <h2>Ticket cancelled</h2>
+            <p>PNR {{ b.pnr }} was cancelled and is no longer valid for travel.</p>
+        {% elif b.status in ('rac', 'waiting') %}
+            <h2>Not confirmed</h2>
+            <p>PNR {{ b.pnr }} is on the {{ b.status|upper }} list at position {{ b.queue_position }}.</p>
+        {% else %}
+            <h2>Valid ticket</h2>
+            <p>PNR {{ b.pnr }} is confirmed for travel.</p>
+        {% endif %}
+        <table class="kv">
+            <tr><th>Name</th><td>{{ b.user_name }}</td><th>Train</th><td>{{ b.train_number }} {{ b.train_name }}</td></tr>
+            <tr><th>From</th><td>{{ b.from_name }}</td><th>To</th><td>{{ b.to_name }}</td></tr>
+            <tr><th>Travel date</th><td>{{ b.travel_date }}</td><th>Class</th><td>{{ class_names.get(b.class_code, b.class_code) }}</td></tr>
+            <tr><th>Passengers</th><td>{{ record.passengers|length }}</td><th>Status</th><td>{{ b.status|upper }}</td></tr>
+        </table>
+    </div>
+{% else %}
+    <div class="card verify-card invalid">
+        <h2>Unknown PNR</h2>
+        <p>No ticket was found for PNR {{ pnr }}. The QR code may be forged.</p>
+    </div>
+{% endif %}
+
+<a class="back" href="{{ url_for('main.index') }}">&larr; Back to search</a>
+{% endblock %}

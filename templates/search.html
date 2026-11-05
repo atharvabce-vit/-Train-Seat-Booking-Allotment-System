@@ -4,45 +4,63 @@
 {% block content %}
 <h1>Search Trains</h1>
 
-<form class="card search-form" method="get" action="{{ url_for('search') }}">
+<form class="card search-form" method="get" action="{{ url_for('main.search') }}">
     <div class="field">
         <label for="source">From</label>
-        <input type="text" id="source" name="source" value="{{ source }}" placeholder="e.g. Mumbai" required>
+        <input type="text" id="source" name="source" value="{{ source }}"
+               placeholder="City or station" autocomplete="off" data-stations required>
     </div>
     <div class="field">
         <label for="destination">To</label>
-        <input type="text" id="destination" name="destination" value="{{ destination }}" placeholder="e.g. Delhi" required>
+        <input type="text" id="destination" name="destination" value="{{ destination }}"
+               placeholder="City or station" autocomplete="off" data-stations required>
     </div>
     <div class="field">
         <label for="date">Travel Date</label>
-        <input type="date" id="date" name="date" value="{{ travel_date }}">
+        <input type="date" id="date" name="date" value="{{ travel_date }}" data-travel-date>
     </div>
     <button type="submit">Search</button>
 </form>
 
 {% if trains is not none %}
-    <h2>Results</h2>
+    <h2>Results {% if travel_date %}<span class="muted">for {{ travel_date }}</span>{% endif %}</h2>
     {% if trains %}
         {% for train in trains %}
             <div class="card train-card">
                 <div class="train-info">
                     <h3>{{ train.train_number }} &mdash; {{ train.train_name }}</h3>
-                    <p>{{ train.source }} ({{ train.depart_time }}) &rarr; {{ train.destination }} ({{ train.arrive_time }})</p>
+                    <p>
+                        {{ train.from_name }} ({{ train.depart_label }}) &rarr;
+                        {{ train.to_name }} ({{ train.arrive_label }})
+                    </p>
+                    <p class="muted">
+                        {{ train.distance_km }} km &middot; {{ train.duration }} &middot; Runs {{ train.runs_on }}
+                    </p>
                 </div>
-                <form class="inline-form" method="get" action="{{ url_for('book') }}">
-                    <input type="hidden" name="train_id" value="{{ train.id }}">
-                    <input type="hidden" name="date" value="{{ travel_date }}">
-                    <select name="class_code">
-                        {% for code, label in class_names.items() %}
-                            <option value="{{ code }}">{{ label }} ({{ code }}) &mdash; Rs {{ fares[code] }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit">Book</button>
-                </form>
+                <div class="train-actions">
+                    <a class="button ghost" href="{{ url_for('main.schedule', train_id=train.id) }}">Schedule</a>
+                    <form class="inline-form" method="get" action="{{ url_for('booking.book') }}">
+                        <input type="hidden" name="train_id" value="{{ train.id }}">
+                        <input type="hidden" name="from_seq" value="{{ train.from_seq }}">
+                        <input type="hidden" name="to_seq" value="{{ train.to_seq }}">
+                        <input type="hidden" name="date" value="{{ travel_date }}">
+                        <select name="quota">
+                            {% for code, label in quota_names.items() %}
+                                <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Check availability</button>
+                    </form>
+                </div>
             </div>
         {% endfor %}
     {% else %}
-        <p class="muted">No trains found for this route.</p>
+        <p class="muted">No trains found for this route. Try "Mumbai" &rarr; "Delhi".</p>
     {% endif %}
+{% else %}
+    <div class="card muted">
+        <p>Popular routes: Mumbai &rarr; Delhi, Chennai &rarr; Delhi, Kolkata &rarr; Delhi,
+           Hyderabad &rarr; Delhi, Mumbai &rarr; Ahmedabad.</p>
+    </div>
 {% endif %}
 {% endblock %}

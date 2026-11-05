@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Confirm booking{% endblock %}
+
+{% block content %}
+<h1>Confirm your booking</h1>
+
+<div class="card hold-banner">
+    <p>Seats are held for you. <strong>Hold expires in <span id="countdown" data-seconds="{{ seconds_left }}">--:--</span></strong></p>
+</div>
+
+<div class="card">
+    <h2>{{ train.train_number }} &mdash; {{ train.train_name }}</h2>
+    <p class="muted">
+        {{ from_stop.station_name }} ({{ from_stop.departure_time }}) &rarr;
+        {{ to_stop.station_name }} ({{ to_stop.arrival_time }}) &middot;
+        {{ hold.travel_date }} &middot; {{ distance }} km &middot;
+        {{ quota_names.get(hold.quota, hold.quota) }} quota &middot;
+        {{ class_names.get(hold.class_code, hold.class_code) }}
+    </p>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Passengers</h2>
+        <ul class="plain">
+            {% for passenger in passengers %}
+                <li>{{ passenger.name }} &middot; {{ passenger.age }} &middot; {{ passenger.gender }}
+                    <span class="muted">{{ berth_names.get(passenger.preference, passenger.preference) }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="card">
+        <h2>Allotted seats</h2>
+        <ul class="plain">
+            {% for seat in seats %}
+                <li>{{ seat.coach_name }} / {{ seat.seat_number }}
+                    <span class="muted">{{ berth_names.get(seat.berth_type, seat.berth_type) }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Contact</h2>
+    <p>{{ user.name }} &middot; {{ user.email }} {% if user.phone %}&middot; {{ user.phone }}{% endif %}</p>
+</div>
+
+<form method="post" action="{{ url_for('booking.confirm_payment', token=token) }}">
+    <div class="card">
+        <div class="field">
+            <label for="payment_method">Payment method (mock gateway)</label>
+            <select id="payment_method" name="payment_method">
+                {% for option in payment_methods %}
+                    <option value="{{ option }}" {% if option == method %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fare-summary">
+            <span>Total payable</span>
+            <strong>Rs {{ fare }}</strong>
+        </div>
+    </div>
+    <button type="submit" class="primary">Pay Rs {{ fare }} and confirm</button>
+</form>
+
+<a class="back" href="{{ url_for('booking.book', train_id=hold.train_id, cls=hold.class_code, date=hold.travel_date, from_seq=hold.from_seq, to_seq=hold.to_seq, quota=hold.quota) }}">Cancel and choose again</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        var node = document.getElementById('countdown');
+        if (!node) { return; }
+        var seconds = parseInt(node.dataset.seconds, 10) || 0;
+        function render() {
+            if (seconds <= 0) {
+                node.textContent = 'expired';
+                node.classList.add('danger');
+                return;
+            }
+            var m = Math.floor(seconds / 60);
+            var s = seconds % 60;
+            node.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        }
+        render();
+        setInterval(function () {
+            seconds -= 1;
+            render();
+        }, 1000);
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}My Bookings{% endblock %}
+
+{% block content %}
+<h1>My Bookings</h1>
+
+<form class="card search-form" method="get" action="{{ url_for('booking.my_bookings') }}">
+    <div class="field">
+        <label for="email">E-mail used for booking</label>
+        <input type="email" id="email" name="email" value="{{ email }}" required>
+    </div>
+    <button type="submit">Find bookings</button>
+</form>
+
+{% if bookings %}
+    <div class="card">
+        <table class="data">
+            <thead>
+                <tr><th>PNR</th><th>Train</th><th>Route</th><th>Date</th><th>Class</th><th>Quota</th><th>Status</th><th>Fare</th></tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td><a href="{{ url_for('booking.ticket', pnr=booking.pnr) }}">{{ booking.pnr }}</a></td>
+                        <td>{{ booking.train_number }} {{ booking.train_name }}</td>
+                        <td>{{ booking.from_city }} &rarr; {{ booking.to_city }}</td>
+                        <td>{{ booking.travel_date }}</td>
+                        <td>{{ class_names.get(booking.class_code, booking.class_code) }}</td>
+                        <td>{{ quota_names.get(booking.quota, booking.quota) }}</td>
+                        <td><span class="status status-{{ booking.status }}">{{ booking.status|upper }}</span>
+                            {% if booking.queue_position %}<span class="muted">#{{ booking.queue_position }}</span>{% endif %}
+                        </td>
+                        <td>Rs {{ booking.total_fare }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% endblock %}

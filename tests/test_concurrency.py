@@ -6,8 +6,9 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import create_tables, get_connection
-from models.booking import BookingError, book_seats, cancel_booking, get_available_seats
+from models.booking import BookingError, book_seats, cancel_booking
 from models.pnr import get_booking_by_pnr
+from models.trains import available_count
 from seed import create_train
 
 TRAVEL_DATE = date.today().isoformat()
@@ -21,7 +22,8 @@ def setup_db(db_path):
     conn = get_connection(db_path)
     create_tables(conn)
     train_id = create_train(
-        conn, "98001", "Concurrency Express", "A", "B", "10:00", "18:00", plan=PLAN
+        conn, "98001", "Concurrency Express", "A", "B", "10:00", "18:00",
+        plan=PLAN, tatkal_ratio=0,
     )
     cursor = conn.execute(
         "INSERT INTO users (name, email) VALUES ('Racer', 'racer@example.com')"
@@ -48,7 +50,7 @@ def test_concurrent_bookings_never_double_book_seats(tmp_path):
                 {"name": f"P{i}", "age": 25, "gender": "M"}
                 for i in range(PASSENGERS_PER_THREAD)
             ]
-            pnr = book_seats(conn, user_id, train_id, "SL", TRAVEL_DATE, passengers)
+            pnr = book_seats(conn, user_id, train_id, "SL", TRAVEL_DATE, 1, 2, passengers)
             with lock:
                 successes.append(pnr)
         except BookingError:
@@ -69,10 +71,7 @@ def test_concurrent_bookings_never_double_book_seats(tmp_path):
     conn = get_connection(db_path)
     try:
         booked = conn.execute(
-            """
-            SELECT COUNT(*) AS c FROM seat_inventory
-            WHERE travel_date = ? AND status = 'booked'
-            """,
+            "SELECT COUNT(*) AS c FROM seat_inventory WHERE travel_date = ? AND status = 'booked'",
             (TRAVEL_DATE,),
         ).fetchone()["c"]
         assert booked == TOTAL_SEATS
@@ -80,13 +79,12 @@ def test_concurrent_bookings_never_double_book_seats(tmp_path):
         duplicates = conn.execute(
             """
             SELECT seat_number FROM passengers
-            GROUP BY seat_number
+            GROUP BY coach_name, seat_number
             HAVING COUNT(*) > 1
             """
         ).fetchall()
         assert duplicates == []
-
-        assert len(get_available_seats(conn, train_id, "SL", TRAVEL_DATE)) == 0
+        assert available_count(conn, train_id, "SL", TRAVEL_DATE, 1, 2) == 0
     finally:
         conn.close()
 
@@ -97,22 +95,22 @@ def test_cancelled_seats_can_be_reused_under_concurrency(tmp_path):
 
     conn = get_connection(db_path)
     pnr = book_seats(
-        conn, user_id, train_id, "SL", TRAVEL_DATE,
+        conn, user_id, train_id, "SL", TRAVEL_DATE, 1, 2,
         [{"name": "A", "age": 30, "gender": "M"}, {"name": "B", "age": 28, "gender": "F"}],
     )
 
     cancel_booking(conn, pnr)
-    assert len(get_available_seats(conn, train_id, "SL", TRAVEL_DATE)) == TOTAL_SEATS
+    assert available_count(conn, train_id, "SL", TRAVEL_DATE, 1, 2) == TOTAL_SEATS
     conn.close()
 
     conn = get_connection(db_path)
     try:
         new_pnr = book_seats(
-            conn, user_id, train_id, "SL", TRAVEL_DATE,
+            conn, user_id, train_id, "SL", TRAVEL_DATE, 1, 2,
             [{"name": "C", "age": 40, "gender": "M"}],
         )
         record = get_booking_by_pnr(conn, new_pnr)
         assert len(record["passengers"]) == 1
-        assert len(get_available_seats(conn, train_id, "SL", TRAVEL_DATE)) == TOTAL_SEATS - 1
+        assert available_count(conn, train_id, "SL", TRAVEL_DATE, 1, 2) == TOTAL_SEATS - 1
     finally:
         conn.close()

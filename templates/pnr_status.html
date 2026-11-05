@@ -1,65 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Check PNR{% endblock %}
+{% block title %}PNR Status{% endblock %}
 
 {% block content %}
 <h1>Check PNR Status</h1>
 
-<form class="card inline-form" method="get" action="{{ url_for('pnr_status') }}">
+<form class="card search-form" method="get" action="{{ url_for('booking.pnr_status') }}">
     <div class="field">
-        <label for="pnr">PNR (10 digits)</label>
-        <input type="text" id="pnr" name="pnr" value="{{ pnr }}" pattern="[0-9]{10}" maxlength="10" required>
+        <label for="pnr">PNR number</label>
+        <input type="text" id="pnr" name="pnr" value="{{ pnr }}" placeholder="10-digit PNR" maxlength="10" required>
     </div>
-    <button type="submit">Check Status</button>
+    <button type="submit">Check status</button>
 </form>
 
 {% if record %}
     {% set b = record.booking %}
     <div class="card">
-        <h2>PNR {{ b.pnr }} &mdash; <span class="status-{{ b.status }}">{{ b.status|upper }}</span></h2>
-        <div class="grid">
-            <p><span>Train</span>{{ b.train_number }} &mdash; {{ b.train_name }}</p>
-            <p><span>Route</span>{{ b.source }} &rarr; {{ b.destination }}</p>
-            <p><span>Class</span>{{ class_names.get(b.class_code, b.class_code) }} ({{ b.class_code }})</p>
-            <p><span>Travel Date</span>{{ b.travel_date }}</p>
-            <p><span>Passengers</span>{{ record.passengers|length }}</p>
-            <p><span>Total Fare</span>INR {{ b.total_fare }}</p>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Age</th>
-                    <th>Gender</th>
-                    <th>Coach</th>
-                    <th>Seat</th>
-                    <th>Berth</th>
-                </tr>
-            </thead>
+        <h2>PNR {{ b.pnr }} <span class="status status-{{ b.status }}">{{ b.status|upper }}</span></h2>
+        <p class="muted">
+            {{ b.train_number }} {{ b.train_name }} &middot; {{ b.from_city }} &rarr; {{ b.to_city }} &middot;
+            {{ b.travel_date }} &middot; {{ class_names.get(b.class_code, b.class_code) }} &middot;
+            {{ quota_names.get(b.quota, b.quota) }}
+        </p>
+        {% if b.status in ('rac', 'waiting') %}
+            <p>Queue position: <strong>{{ b.queue_position }}</strong></p>
+        {% endif %}
+        <table class="data">
+            <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Status</th></tr></thead>
             <tbody>
-                {% for p in record.passengers %}
+                {% for passenger in record.passengers %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ p.name }}</td>
-                        <td>{{ p.age }}</td>
-                        <td>{{ p.gender }}</td>
-                        <td>{{ p.coach_name }}</td>
-                        <td>{{ p.seat_number }}</td>
-                        <td>{{ p.berth_type }}</td>
+                        <td>{{ passenger.name }}</td>
+                        <td>{{ passenger.age }}</td>
+                        <td>{{ passenger.coach_name or '-' }}</td>
+                        <td>{{ passenger.seat_number or '-' }}</td>
+                        <td>{{ berth_names.get(passenger.berth_type or '', passenger.berth_type or '-') }}</td>
+                        <td>{{ passenger.status|upper }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
-
-        <div class="actions">
-            <a class="button-link" href="{{ url_for('ticket', pnr=b.pnr) }}">View Ticket</a>
-            {% if b.status == 'confirmed' %}
-                <form method="post" action="{{ url_for('cancel', pnr=b.pnr) }}">
-                    <button type="submit" class="danger">Cancel Booking</button>
-                </form>
-            {% endif %}
-        </div>
+        <a class="button" href="{{ url_for('booking.ticket', pnr=b.pnr) }}">View ticket</a>
+        {% if b.status != 'cancelled' %}
+            <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}" class="inline"
+                  onsubmit="return confirm('Cancel this booking?');">
+                <button type="submit" class="danger">Cancel booking</button>
+            </form>
+        {% endif %}
     </div>
 {% endif %}
 {% endblock %}

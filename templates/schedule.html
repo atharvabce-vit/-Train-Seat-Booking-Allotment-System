@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Schedule {{ train.train_number }}{% endblock %}
+
+{% block content %}
+<h1>{{ train.train_number }} &mdash; {{ train.train_name }}</h1>
+<p class="muted">Runs {{ train.runs_on }} &middot; {{ stops|length }} halts</p>
+
+<div class="card">
+    <table class="data">
+        <thead>
+            <tr><th>#</th><th>Station</th><th>City</th><th>Arrival</th><th>Departure</th><th>Halting</th><th>Day</th><th>Distance</th></tr>
+        </thead>
+        <tbody>
+            {% for stop in stops %}
+                <tr>
+                    <td>{{ stop.seq }}</td>
+                    <td>{{ stop.station_name }} ({{ stop.station_code }})</td>
+                    <td>{{ stop.city }}</td>
+                    <td>{{ stop.arrival_time or '--' }}</td>
+                    <td>{{ stop.departure_time or '--' }}</td>
+                    <td>--</td>
+                    <td>{{ stop.day_offset }}</td>
+                    <td>{{ stop.distance_from_source }} km</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<a class="back" href="{{ url_for('main.index') }}">&larr; Back to search</a>
+{% endblock %}

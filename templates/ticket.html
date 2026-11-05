@@ -1,64 +1,109 @@
 {% extends "base.html" %}
-{% block title %}Ticket {{ record.booking.pnr }}{% endblock %}
+{% block title %}E-Ticket {{ record.booking.pnr }}{% endblock %}
 
 {% block content %}
 {% set b = record.booking %}
-<div class="card ticket">
+<div class="ticket">
     <div class="ticket-head">
         <div>
-            <h1>E-Ticket</h1>
-            <p class="muted">RailYatra &mdash; Train Seat Booking &amp; Seat Allotment System</p>
+            <h1>Electronic Reservation Slip</h1>
+            <p class="muted">RailYatra &middot; Indian Railways (mock)</p>
         </div>
         <div class="pnr-box">
-            <span>PNR</span>
+            <span class="muted">PNR</span>
             <strong>{{ b.pnr }}</strong>
+            <span class="status status-{{ b.status }}">{{ b.status|upper }}</span>
+            {% if b.status in ('rac', 'waiting') %}
+                <span class="muted">Queue position {{ b.queue_position }}</span>
+            {% endif %}
         </div>
     </div>
 
-    <div class="grid">
-        <p><span>Train</span>{{ b.train_number }} &mdash; {{ b.train_name }}</p>
-        <p><span>Class</span>{{ class_names.get(b.class_code, b.class_code) }} ({{ b.class_code }})</p>
-        <p><span>From</span>{{ b.source }} ({{ b.depart_time }})</p>
-        <p><span>To</span>{{ b.destination }} ({{ b.arrive_time }})</p>
-        <p><span>Travel Date</span>{{ b.travel_date }}</p>
-        <p><span>Status</span>
-            <strong class="status-{{ b.status }}">{{ b.status|upper }}</strong>
-        </p>
-        <p><span>Booked By</span>{{ b.user_name }}</p>
-        <p><span>Total Fare</span>INR {{ b.total_fare }}</p>
-    </div>
+    <table class="kv">
+        <tr>
+            <th>Train</th>
+            <td>{{ b.train_number }} &mdash; {{ b.train_name }}</td>
+            <th>Class</th>
+            <td>{{ class_names.get(b.class_code, b.class_code) }}</td>
+        </tr>
+        <tr>
+            <th>From</th>
+            <td>{{ b.from_name }} ({{ b.from_city }})</td>
+            <th>To</th>
+            <td>{{ b.to_name }} ({{ b.to_city }})</td>
+        </tr>
+        <tr>
+            <th>Departure</th>
+            <td>{{ b.depart_time or '--' }} {% if b.from_day %}(+{{ b.from_day }}d){% endif %}</td>
+            <th>Arrival</th>
+            <td>{{ b.arrive_time or '--' }} {% if b.to_day %}(+{{ b.to_day }}d){% endif %}</td>
+        </tr>
+        <tr>
+            <th>Travel date</th>
+            <td>{{ b.travel_date }}</td>
+            <th>Quota</th>
+            <td>{{ quota_names.get(b.quota, b.quota) }}</td>
+        </tr>
+        <tr>
+            <th>Distance</th>
+            <td>{{ b.distance_km }} km</td>
+            <th>Total fare</th>
+            <td>Rs {{ b.total_fare }}</td>
+        </tr>
+        <tr>
+            <th>Booked by</th>
+            <td>{{ b.user_name }} ({{ b.email }})</td>
+            <th>Booked at</th>
+            <td>{{ b.booked_at }}</td>
+        </tr>
+    </table>
 
-    <h3>Passengers</h3>
-    <table>
+    <h2>Passengers</h2>
+    <table class="data">
         <thead>
-            <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Age</th>
-                <th>Gender</th>
-                <th>Coach</th>
-                <th>Seat</th>
-                <th>Berth</th>
-            </tr>
+            <tr><th>#</th><th>Name</th><th>Age</th><th>Gender</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Status</th></tr>
         </thead>
         <tbody>
-            {% for p in record.passengers %}
+            {% for passenger in record.passengers %}
                 <tr>
                     <td>{{ loop.index }}</td>
-                    <td>{{ p.name }}</td>
-                    <td>{{ p.age }}</td>
-                    <td>{{ p.gender }}</td>
-                    <td>{{ p.coach_name }}</td>
-                    <td>{{ p.seat_number }}</td>
-                    <td>{{ p.berth_type }}</td>
+                    <td>{{ passenger.name }}</td>
+                    <td>{{ passenger.age }}</td>
+                    <td>{{ passenger.gender }}</td>
+                    <td>{{ passenger.coach_name or '-' }}</td>
+                    <td>{{ passenger.seat_number or '-' }}</td>
+                    <td>{{ berth_names.get(passenger.berth_type or '', passenger.berth_type or '-') }}</td>
+                    <td>{{ passenger.status|upper }}</td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="actions">
-        <button type="button" onclick="window.print()">Print Ticket</button>
-        <a class="button-link" href="{{ url_for('pnr_status', pnr=b.pnr) }}">Check PNR</a>
+    {% if record.refunds %}
+        <h2>Refunds</h2>
+        <ul class="plain">
+            {% for refund in record.refunds %}
+                <li>Rs {{ refund.amount }} ({{ refund.percent }}%) &middot; {{ refund.reason }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <div class="ticket-foot">
+        <img src="{{ qr }}" alt="QR code for {{ b.pnr }}" class="qr">
+        <p class="muted">Scan to verify at <a href="{{ verify_url }}">{{ verify_url }}</a></p>
     </div>
 </div>
+
+<div class="actions">
+    <a class="button" href="{{ url_for('booking.ticket_pdf', pnr=b.pnr) }}">Download PDF</a>
+    <button type="button" class="button ghost" onclick="window.print()">Print</button>
+    <a class="button ghost" href="{{ url_for('booking.pnr_status', pnr=b.pnr) }}">PNR status</a>
+</div>
+
+{% if b.status != 'cancelled' %}
+    <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}"
+          onsubmit="return confirm('Cancel this booking?');">
+        <button type="submit" class="danger">Cancel booking</button>
+    </form>
+{% endif %}
 {% endblock %}

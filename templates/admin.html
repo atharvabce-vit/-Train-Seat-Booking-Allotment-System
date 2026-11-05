@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Admin dashboard{% endblock %}
+
+{% block content %}
+<h1>Admin dashboard</h1>
+<p class="muted">Generated at {{ data.summary.generated_at }}</p>
+
+<div class="stat-grid">
+    <div class="stat"><span class="muted">Bookings</span><strong>{{ data.summary.bookings }}</strong></div>
+    <div class="stat"><span class="muted">Confirmed</span><strong>{{ data.summary.confirmed }}</strong></div>
+    <div class="stat"><span class="muted">RAC</span><strong>{{ data.summary.rac }}</strong></div>
+    <div class="stat"><span class="muted">Waitlist</span><strong>{{ data.summary.waiting }}</strong></div>
+    <div class="stat"><span class="muted">Cancelled</span><strong>{{ data.summary.cancelled }}</strong></div>
+    <div class="stat"><span class="muted">Passengers</span><strong>{{ data.summary.passengers }}</strong></div>
+    <div class="stat"><span class="muted">Revenue</span><strong>Rs {{ data.summary.revenue }}</strong></div>
+    <div class="stat"><span class="muted">Refunded</span><strong>Rs {{ data.summary.refunded }}</strong></div>
+    <div class="stat"><span class="muted">Net revenue</span><strong>Rs {{ data.summary.net_revenue }}</strong></div>
+    <div class="stat"><span class="muted">Active holds</span><strong>{{ data.summary.active_holds }}</strong></div>
+    <div class="stat"><span class="muted">Trains</span><strong>{{ data.summary.trains }}</strong></div>
+    <div class="stat"><span class="muted">Stations</span><strong>{{ data.summary.stations }}</strong></div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Bookings by class</h2>
+        <table class="data">
+            <thead><tr><th>Class</th><th>Bookings</th><th>Confirmed fare</th></tr></thead>
+            <tbody>
+                {% for row in data.classes %}
+                    <tr><td>{{ class_names.get(row.class_code, row.class_code) }}</td><td>{{ row.bookings }}</td><td>Rs {{ row.fare }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <h2>Quota split</h2>
+        <table class="data">
+            <thead><tr><th>Quota</th><th>Status</th><th>Count</th></tr></thead>
+            <tbody>
+                {% for row in data.quota %}
+                    <tr><td>{{ quota_names.get(row.quota, row.quota) }}</td><td>{{ row.status }}</td><td>{{ row.c }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Top routes</h2>
+        <table class="data">
+            <thead><tr><th>Route</th><th>Bookings</th><th>Fare</th></tr></thead>
+            <tbody>
+                {% for row in data.routes %}
+                    <tr><td>{{ row.from_city }} &rarr; {{ row.to_city }}</td><td>{{ row.bookings }}</td><td>Rs {{ row.fare }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <h2>Revenue (last 7 days)</h2>
+        <table class="data">
+            <thead><tr><th>Day</th><th>Amount</th></tr></thead>
+            <tbody>
+                {% for row in data.revenue %}
+                    <tr><td>{{ row.day }}</td><td>Rs {{ row.amount }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Train load on {{ travel_date }}</h2>
+    <table class="data">
+        <thead><tr><th>Train</th><th>Confirmed bookings</th><th>Fare</th></tr></thead>
+        <tbody>
+            {% for row in data.train_load %}
+                <tr><td>{{ row.train_number }} {{ row.train_name }}</td><td>{{ row.bookings }}</td><td>Rs {{ row.fare }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>RAC / waitlist queue</h2>
+    {% if data.queue %}
+        <table class="data">
+            <thead><tr><th>PNR</th><th>Train</th><th>Date</th><th>Class</th><th>Quota</th><th>Status</th><th>Position</th></tr></thead>
+            <tbody>
+                {% for row in data.queue %}
+                    <tr>
+                        <td>{{ row.pnr }}</td><td>{{ row.train_number }}</td><td>{{ row.travel_date }}</td>
+                        <td>{{ row.class_code }}</td><td>{{ row.quota }}</td><td>{{ row.status }}</td><td>{{ row.queue_position }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No RAC or waitlisted bookings.</p>
+    {% endif %}
+</div>
+
+<a class="button ghost" href="{{ url_for('admin.outbox', key=key) }}">Notification outbox</a>
+{% endblock %}

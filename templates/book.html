@@ -1,118 +1,171 @@
 {% extends "base.html" %}
-{% block title %}Book Seats{% endblock %}
+{% block title %}Book {{ train.train_number }}{% endblock %}
 
 {% block content %}
-<h1>Book Seats</h1>
+<a class="back" href="{{ url_for('main.search', source=from_stop.city, destination=to_stop.city, date=travel_date) }}">&larr; Back to results</a>
 
 <div class="card">
-    <h2>{{ train.train_number }} &mdash; {{ train.train_name }}</h2>
-    <p>{{ train.source }} ({{ train.depart_time }}) &rarr; {{ train.destination }} ({{ train.arrive_time }})</p>
-    <p>Travel date: <strong>{{ travel_date }}</strong></p>
-    <p>Seats available in {{ class_names.get(class_code, class_code) }}:
-        <strong>{{ available }}</strong> of {{ capacity }}{% if capacity %}
-        ({{ (available / capacity * 100) | round(1) }}% free){% endif %}</p>
+    <h1>{{ train.train_number }} &mdash; {{ train.train_name }}</h1>
+    <p class="muted">{{ from_stop.station_name }} ({{ from_stop.departure_time }}) &rarr;
+       {{ to_stop.station_name }} ({{ to_stop.arrival_time }}) &middot;
+       {{ distance }} km &middot; {{ travel_date }}</p>
 </div>
 
-<form class="card inline-form" method="get" action="{{ url_for('book') }}">
+<form class="card options" id="options" method="get" action="{{ url_for('booking.book') }}">
     <input type="hidden" name="train_id" value="{{ train.id }}">
-    <input type="hidden" name="date" value="{{ travel_date }}">
-    <label for="class_code">Class</label>
-    <select id="class_code" name="class_code" onchange="this.form.submit()">
-        {% for code in classes %}
-            <option value="{{ code }}" {% if code == class_code %}selected{% endif %}>
-                {{ class_names.get(code, code) }} ({{ code }}) &mdash; Rs {{ fares[code] }}
-            </option>
-        {% endfor %}
-    </select>
-    <noscript><button type="submit">Change</button></noscript>
+    <input type="hidden" name="cls" id="class-mirror" value="{{ selected_class }}">
+    <div class="field">
+        <label for="from_seq">Boarding station</label>
+        <select name="from_seq" id="from_seq">
+            {% for stop in stops %}
+                {% if not loop.last %}
+                    <option value="{{ stop.seq }}" {% if stop.seq == from_seq %}selected{% endif %}>
+                        {{ stop.station_name }} &mdash; {{ stop.departure_time or stop.arrival_time }}
+                    </option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="to_seq">Destination station</label>
+        <select name="to_seq" id="to_seq">
+            {% for stop in stops %}
+                {% if not loop.first %}
+                    <option value="{{ stop.seq }}" {% if stop.seq == to_seq %}selected{% endif %}>
+                        {{ stop.station_name }} &mdash; {{ stop.arrival_time or stop.departure_time }}
+                    </option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="date">Travel date</label>
+        <input type="date" id="date" name="date" value="{{ travel_date }}" data-travel-date>
+    </div>
+    <div class="field">
+        <label for="quota">Quota</label>
+        <select name="quota" id="quota">
+            {% for code, label in quota_names.items() %}
+                <option value="{{ code }}" {% if code == quota %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="ghost">Update availability</button>
 </form>
 
-<form class="card" method="post" action="{{ url_for('book') }}">
-    <input type="hidden" name="train_id" value="{{ train.id }}">
-    <input type="hidden" name="class_code" value="{{ class_code }}">
-    <input type="hidden" name="travel_date" value="{{ travel_date }}">
+{% if quota == 'TQ' and not tatkal_open %}
+    <div class="flash"><p>Tatkal booking opens only 24 hours before departure for this train.</p></div>
+{% endif %}
 
-    <h3>Contact Details</h3>
-    <div class="grid">
+<form method="post" action="{{ url_for('booking.create_booking_hold') }}" id="booking-form">
+    <input type="hidden" name="train_id" value="{{ train.id }}">
+    <input type="hidden" name="travel_date" value="{{ travel_date }}">
+    <input type="hidden" name="from_seq" value="{{ from_seq }}">
+    <input type="hidden" name="to_seq" value="{{ to_seq }}">
+    <input type="hidden" name="quota" value="{{ quota }}">
+
+    <div class="card">
+        <h2>Choose class</h2>
+        <div class="class-grid">
+            {% for option in classes %}
+                <label class="class-card {% if option.available == 0 %}soldout{% endif %}">
+                    <input type="radio" name="class_code" value="{{ option.code }}"
+                           data-fare="{{ option.fare }}"
+                           {% if option.code == selected_class %}checked{% endif %}>
+                    <span class="class-name">{{ option.name }} ({{ option.code }})</span>
+                    <span class="class-fare">Rs {{ option.fare }} / passenger</span>
+                    <span class="class-avail">
+                        {% if option.available > 0 %}
+                            {{ option.available }} of {{ option.capacity }} available
+                        {% else %}
+                            Waitlist / RAC
+                        {% endif %}
+                    </span>
+                </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Passengers</h2>
+        <p class="muted">Maximum 6 passengers per PNR. Seniors (58+) are automatically given a lower berth.</p>
+        <table class="passenger-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Age</th>
+                    <th>Gender</th>
+                    <th>Berth preference</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="passenger-rows"></tbody>
+        </table>
+        <button type="button" class="ghost" id="add-passenger">+ Add passenger</button>
+    </div>
+
+    <div class="card">
+        <h2>Contact details</h2>
         <div class="field">
-            <label for="user_name">Full Name</label>
+            <label for="user_name">Full name</label>
             <input type="text" id="user_name" name="user_name" required>
         </div>
         <div class="field">
-            <label for="user_email">Email</label>
+            <label for="user_email">E-mail</label>
             <input type="email" id="user_email" name="user_email" required>
         </div>
         <div class="field">
-            <label for="user_phone">Phone</label>
+            <label for="user_phone">Phone (optional)</label>
             <input type="text" id="user_phone" name="user_phone">
         </div>
+        <div class="field">
+            <label for="payment_method">Payment method (mock)</label>
+            <select id="payment_method" name="payment_method">
+                {% for method in payment_methods %}
+                    <option value="{{ method }}" {% if method == default_method %}selected{% endif %}>{{ method }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
 
-    <h3>Passengers (max 6)</h3>
-    <div class="field">
-        <label for="count">Number of passengers</label>
-        <input type="number" id="count" min="1" max="6" value="1">
+    <div class="card fare-summary">
+        <span>Estimated total</span>
+        <strong id="fare-total">Rs 0</strong>
     </div>
 
-    <div id="passenger-rows"></div>
-
-    <div class="fare-box" id="fare-box" data-price="{{ fares.get(class_code, 0) }}">
-        <p>Base fare per passenger: <strong>Rs <span id="base-fare">{{ fares.get(class_code, 0) }}</span></strong></p>
-        <p class="fare-total">Total fare: <strong>Rs <span id="total-fare">{{ fares.get(class_code, 0) }}</span></strong></p>
-    </div>
-
-    <button type="submit" {% if available == 0 %}disabled{% endif %}>Confirm Booking</button>
-    {% if available == 0 %}
-        <p class="muted">No seats available in this class for the selected date.</p>
-    {% endif %}
+    <button type="submit" class="primary">Continue to confirm</button>
 </form>
 
-<template id="passenger-template">
-    <div class="passenger-row grid">
-        <div class="field">
-            <label>Name</label>
-            <input type="text" name="passenger_name" required>
-        </div>
-        <div class="field">
-            <label>Age</label>
-            <input type="number" name="passenger_age" min="1" max="120" required>
-        </div>
-        <div class="field">
-            <label>Gender</label>
+<template id="passenger-row-template">
+    <tr>
+        <td><input type="text" name="passenger_name" placeholder="Full name" required></td>
+        <td><input type="number" name="passenger_age" min="1" max="120" required></td>
+        <td>
             <select name="passenger_gender">
                 <option value="M">Male</option>
                 <option value="F">Female</option>
                 <option value="O">Other</option>
             </select>
-        </div>
-    </div>
+        </td>
+        <td>
+            <select name="passenger_preference">
+                {% for code, label in berth_names.items() %}
+                    <option value="{{ code }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td><button type="button" class="remove-row">&times;</button></td>
+    </tr>
 </template>
+{% endblock %}
 
+{% block scripts %}
 <script>
-    const countInput = document.getElementById("count");
-    const rowsContainer = document.getElementById("passenger-rows");
-    const template = document.getElementById("passenger-template");
-    const fareBox = document.getElementById("fare-box");
-    const totalFare = document.getElementById("total-fare");
-    const pricePerPassenger = parseInt(fareBox.dataset.price, 10) || 0;
-
-    function renderRows() {
-        const count = Math.min(Math.max(parseInt(countInput.value, 10) || 1, 1), 6);
-        const current = rowsContainer.children.length;
-        if (count > current) {
-            for (let i = current; i < count; i++) {
-                rowsContainer.appendChild(template.content.cloneNode(true));
-            }
-        } else {
-            while (rowsContainer.children.length > count) {
-                rowsContainer.removeChild(rowsContainer.lastElementChild);
-            }
-        }
-        totalFare.textContent = (pricePerPassenger * count).toLocaleString("en-IN");
-    }
-
-    countInput.addEventListener("change", renderRows);
-    countInput.addEventListener("input", renderRows);
-    renderRows();
+    document.querySelectorAll('input[name="class_code"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            document.getElementById('class-mirror').value = this.value;
+            document.getElementById('options').submit();
+        });
+    });
 </script>
 {% endblock %}
