@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+
+{% block content %}
+<h1>Audit log</h1>
+<p class="muted">Every booking, cancellation, reschedule and admin change is recorded here.</p>
+
+{% if entries %}
+    <div class="card">
+        <table class="data">
+            <thead>
+                <tr><th>#</th><th>When</th><th>Action</th><th>Entity</th><th>Ref</th><th>Detail</th></tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                    <tr>
+                        <td>{{ entry.id }}</td>
+                        <td>{{ entry.created_at }}</td>
+                        <td><span class="status">{{ entry.action }}</span></td>
+                        <td>{{ entry.entity }}</td>
+                        <td>{{ entry.entity_id or '-' }}</td>
+                        <td>{{ entry.detail or '-' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <p class="muted">No audit entries yet.</p>
+{% endif %}
+
+<a class="back" href="{{ url_for('admin.dashboard', key=key) }}">&larr; Back to dashboard</a>
+{% endblock %}

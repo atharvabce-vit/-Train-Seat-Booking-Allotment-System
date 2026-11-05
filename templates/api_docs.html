@@ -6,6 +6,18 @@
 <p class="muted">All endpoints return JSON. Base URL: <code>{{ request.url_root }}api</code></p>
 
 <div class="card">
+    <h2>Authentication &amp; limits</h2>
+    <p>
+        Read endpoints are open. Write endpoints (<code>POST /api/book</code>,
+        <code>POST /api/book-round-trip</code>, <code>POST /api/cancel/&lt;pnr&gt;</code>,
+        <code>POST /api/reschedule/&lt;pnr&gt;</code>) require an API token in the
+        <code>X-API-Token</code> header.
+    </p>
+    <p class="muted">Demo token: <code>demo-token-123</code>. Requests are limited to 60 per minute per token.</p>
+    <p><a class="button ghost" href="{{ spec_url }}" target="_blank">OpenAPI 3.0 spec ({{ spec_url }})</a></p>
+</div>
+
+<div class="card">
     <h2>GET /api/stations?q=del</h2>
     <p>Search the station master by city, name or code.</p>
     <pre>{"stations": [{"code": "NDLS", "name": "New Delhi", "city": "Delhi"}]}</pre>
@@ -25,13 +37,19 @@
 
 <div class="card">
     <h2>GET /api/availability</h2>
-    <p>Query parameters: <code>train_id, class, date, from_seq, to_seq</code> and optional <code>quota</code>.</p>
+    <p>Query parameters: <code>train_id, cls, date, from_seq, to_seq</code> and optional <code>quota</code>.</p>
     <pre>{"available": 72, "fare_per_passenger": 785, "tatkal_open": false}</pre>
 </div>
 
 <div class="card">
+    <h2>GET /api/seatmap</h2>
+    <p>Coach-wise seat map for a leg. Same query parameters as <code>/api/availability</code>.</p>
+    <pre>{"coaches": [{"name": "S1", "seats": [{"seat_number": 1, "berth_type": "LB", "status": "available"}]}]}</pre>
+</div>
+
+<div class="card">
     <h2>POST /api/book</h2>
-    <p>Creates a booking and returns a PNR. If no seats are free the passenger is added to RAC or the waitlist.</p>
+    <p>Creates a booking and returns a PNR. If no seats are free the passenger is added to RAC or the waitlist. Requires a token.</p>
     <pre>{
   "train_id": 1, "class": "SL", "date": "2026-11-10",
   "from_seq": 1, "to_seq": 4, "quota": "GN",
@@ -42,18 +60,42 @@
 </div>
 
 <div class="card">
+    <h2>POST /api/book-round-trip</h2>
+    <p>Books an outbound and a return leg together; the return leg gets a 5% discount. Requires a token.</p>
+    <pre>{
+  "user": {"name": "Aarav", "email": "aarav@example.com"},
+  "outbound": {"train_id": 1, "class": "SL", "date": "2026-11-10", "from_seq": 1, "to_seq": 4},
+  "return": {"train_id": 2, "class": "SL", "date": "2026-11-14", "from_seq": 1, "to_seq": 4}
+}</pre>
+    <p class="muted">Response: <code>{"group_id": "...", "outbound": "4021887731", "return": "7712339880"}</code></p>
+</div>
+
+<div class="card">
     <h2>GET /api/pnr/&lt;pnr&gt;</h2>
-    <p>Full booking record with passengers, payments and refunds.</p>
+    <p>Full booking record with passengers, payments, refunds and reschedule history.</p>
 </div>
 
 <div class="card">
     <h2>POST /api/cancel/&lt;pnr&gt;</h2>
-    <p>Cancels a booking, computes the refund and promotes the waitlist.</p>
+    <p>
+        Cancels a booking, computes the refund and promotes the waitlist. Send
+        <code>{"passenger_ids": [12, 13]}</code> to cancel only those passengers. Requires a token.
+    </p>
     <pre>{"pnr": "4021887731", "cancelled": true, "refund": {"percent": 75, "amount": 1767}}</pre>
+</div>
+
+<div class="card">
+    <h2>POST /api/reschedule/&lt;pnr&gt;</h2>
+    <p>Move a confirmed booking to a new date or leg. A change fee applies. Requires a token.</p>
+    <pre>{"date": "2026-11-18", "from_seq": 1, "to_seq": 4}</pre>
+    <p class="muted">Response: <code>{"pnr": "4021887731", "fee": 168, "new_date": "2026-11-18"}</code></p>
 </div>
 
 <div class="card">
     <h2>Try it</h2>
     <pre>curl "{{ request.url_root }}api/search?from=Mumbai&amp;to=Delhi"</pre>
+    <pre>curl -X POST "{{ request.url_root }}api/book" \
+  -H "X-API-Token: demo-token-123" -H "Content-Type: application/json" \
+  -d @booking.json</pre>
 </div>
 {% endblock %}

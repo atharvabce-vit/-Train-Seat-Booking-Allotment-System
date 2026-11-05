@@ -24,29 +24,106 @@
         {% if b.status in ('rac', 'waiting') %}
             <p>Queue position: <strong>{{ b.queue_position }}</strong></p>
         {% endif %}
-        <table class="data">
-            <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Status</th></tr></thead>
-            <tbody>
-                {% for passenger in record.passengers %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ passenger.name }}</td>
-                        <td>{{ passenger.age }}</td>
-                        <td>{{ passenger.coach_name or '-' }}</td>
-                        <td>{{ passenger.seat_number or '-' }}</td>
-                        <td>{{ berth_names.get(passenger.berth_type or '', passenger.berth_type or '-') }}</td>
-                        <td>{{ passenger.status|upper }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <a class="button" href="{{ url_for('booking.ticket', pnr=b.pnr) }}">View ticket</a>
+
         {% if b.status != 'cancelled' %}
-            <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}" class="inline"
-                  onsubmit="return confirm('Cancel this booking?');">
-                <button type="submit" class="danger">Cancel booking</button>
+            <form method="post" action="{{ url_for('booking.cancel_selected', pnr=b.pnr) }}"
+                  onsubmit="return confirm('Cancel the selected passengers?');">
+                <table class="data">
+                    <thead><tr><th></th><th>#</th><th>Name</th><th>Age</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Fare</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for passenger in record.passengers %}
+                            <tr>
+                                <td>
+                                    {% if passenger.status != 'cancelled' %}
+                                        <input type="checkbox" name="passenger_ids" value="{{ passenger.id }}">
+                                    {% endif %}
+                                </td>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ passenger.name }}</td>
+                                <td>{{ passenger.age }}</td>
+                                <td>{{ passenger.coach_name or '-' }}</td>
+                                <td>{{ passenger.seat_number or '-' }}</td>
+                                <td>{{ berth_names.get(passenger.berth_type or '', passenger.berth_type or '-') }}</td>
+                                <td>
+                                    Rs {{ passenger.fare }}
+                                    {% if passenger.concession_percent %}
+                                        <span class="muted">({{ passenger.concession_percent }}% off)</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ passenger.status|upper }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="submit" class="ghost">Cancel selected passengers</button>
             </form>
+        {% else %}
+            <table class="data">
+                <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Status</th></tr></thead>
+                <tbody>
+                    {% for passenger in record.passengers %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ passenger.name }}</td>
+                            <td>{{ passenger.age }}</td>
+                            <td>{{ passenger.coach_name or '-' }}</td>
+                            <td>{{ passenger.seat_number or '-' }}</td>
+                            <td>{{ berth_names.get(passenger.berth_type or '', passenger.berth_type or '-') }}</td>
+                            <td>{{ passenger.status|upper }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         {% endif %}
+
+        <div class="actions">
+            <a class="button" href="{{ url_for('booking.ticket', pnr=b.pnr) }}">View ticket</a>
+            {% if b.status != 'cancelled' %}
+                <button type="button" class="button ghost" onclick="document.getElementById('reschedule').scrollIntoView();">Change date</button>
+                <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}" class="inline"
+                      onsubmit="return confirm('Cancel this booking?');">
+                    <button type="submit" class="danger">Cancel booking</button>
+                </form>
+            {% endif %}
+        </div>
     </div>
+
+    {% if b.status == 'confirmed' %}
+        <div class="card" id="reschedule">
+            <h2>Reschedule this booking</h2>
+            <p class="muted">Move a confirmed ticket to another date. A change fee of 10% (minimum Rs 50) applies.</p>
+            <form method="post" action="{{ url_for('booking.reschedule', pnr=b.pnr) }}">
+                <div class="field">
+                    <label for="new_date">New travel date</label>
+                    <select id="new_date" name="new_date" required>
+                        {% for day in dates %}
+                            <option value="{{ day }}" {% if day == b.travel_date %}selected{% endif %}>{{ day }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="new_from_seq">Boarding station</label>
+                    <select id="new_from_seq" name="new_from_seq">
+                        {% for stop in stops %}
+                            <option value="{{ stop.seq }}" {% if stop.seq == b.from_seq %}selected{% endif %}>
+                                {{ stop.station_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="new_to_seq">Destination station</label>
+                    <select id="new_to_seq" name="new_to_seq">
+                        {% for stop in stops %}
+                            <option value="{{ stop.seq }}" {% if stop.seq == b.to_seq %}selected{% endif %}>
+                                {{ stop.station_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="button">Reschedule</button>
+            </form>
+        </div>
+    {% endif %}
 {% endif %}
 {% endblock %}

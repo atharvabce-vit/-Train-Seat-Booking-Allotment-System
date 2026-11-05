@@ -91,6 +91,13 @@ CREATE TABLE IF NOT EXISTS bookings (
     queue_position INTEGER,
     distance_km    INTEGER NOT NULL DEFAULT 0 CHECK (distance_km >= 0),
     total_fare     INTEGER NOT NULL CHECK (total_fare >= 0),
+    -- Concession amount already waived off total_fare.
+    concession_amount INTEGER NOT NULL DEFAULT 0 CHECK (concession_amount >= 0),
+    -- Round-trip legs share a group_id so they can be shown as one journey.
+    group_id       TEXT,
+    trip_type      TEXT    NOT NULL DEFAULT 'ONE_WAY'
+                   CHECK (trip_type IN ('ONE_WAY', 'ROUND_TRIP')),
+    change_count   INTEGER NOT NULL DEFAULT 0 CHECK (change_count >= 0),
     booked_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     cancelled_at   TEXT,
     CHECK (to_seq > from_seq)
@@ -130,6 +137,10 @@ CREATE TABLE IF NOT EXISTS passengers (
                 CHECK (preference IN ('ANY', 'LB', 'MB', 'UB', 'SL', 'SU')),
     status      TEXT    NOT NULL DEFAULT 'confirmed'
                 CHECK (status IN ('confirmed', 'rac', 'waiting', 'cancelled')),
+    concession_percent INTEGER NOT NULL DEFAULT 0
+                CHECK (concession_percent BETWEEN 0 AND 100),
+    -- Fare actually charged for this passenger, after any concession.
+    fare        INTEGER NOT NULL DEFAULT 0 CHECK (fare >= 0),
     seat_id     INTEGER REFERENCES seats(id) ON DELETE SET NULL,
     coach_name  TEXT,
     seat_number INTEGER,
@@ -171,6 +182,40 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- History of date/leg changes (reschedules) made against a booking.
+CREATE TABLE IF NOT EXISTS booking_changes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    old_date   TEXT    NOT NULL,
+    new_date   TEXT    NOT NULL,
+    old_from_seq INTEGER,
+    old_to_seq   INTEGER,
+    new_from_seq INTEGER,
+    new_to_seq   INTEGER,
+    fee        INTEGER NOT NULL DEFAULT 0 CHECK (fee >= 0),
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Simple audit trail for anything that moves money or seats.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    action     TEXT    NOT NULL,
+    entity     TEXT    NOT NULL,
+    entity_id  TEXT,
+    detail     TEXT,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Tokens for the JSON REST API; writes need a valid active token.
+CREATE TABLE IF NOT EXISTS api_tokens (
+    token        TEXT PRIMARY KEY,
+    label        TEXT NOT NULL,
+    active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    request_count INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_stops_train        ON train_stops(train_id, seq);
 CREATE INDEX IF NOT EXISTS idx_stops_station      ON train_stops(station_code);
 CREATE INDEX IF NOT EXISTS idx_coaches_train      ON coaches(train_id, class_code);
@@ -182,6 +227,8 @@ CREATE INDEX IF NOT EXISTS idx_bookings_pnr       ON bookings(pnr);
 CREATE INDEX IF NOT EXISTS idx_bookings_train     ON bookings(train_id, class_code, travel_date, status);
 CREATE INDEX IF NOT EXISTS idx_passengers_book    ON passengers(booking_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_book ON notifications(booking_id);
+CREATE INDEX IF NOT EXISTS idx_changes_booking    ON booking_changes(booking_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created      ON audit_log(created_at);
 """
 
 

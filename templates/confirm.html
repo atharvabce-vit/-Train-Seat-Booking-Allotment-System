@@ -2,6 +2,9 @@
 {% block title %}Confirm booking{% endblock %}
 
 {% block content %}
+{% set step = 2 %}
+{% include "_stepper.html" %}
+
 <h1>Confirm your booking</h1>
 
 <div class="card hold-banner">
@@ -58,7 +61,10 @@
             </select>
         </div>
         <div class="fare-summary">
-            <span>Total payable</span>
+            <span>
+                Total payable
+                {% if waived %}<span class="muted">(concession applied: Rs {{ waived }})</span>{% endif %}
+            </span>
             <strong>Rs {{ fare }}</strong>
         </div>
     </div>

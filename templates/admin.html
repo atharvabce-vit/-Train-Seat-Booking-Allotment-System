@@ -5,6 +5,24 @@
 <h1>Admin dashboard</h1>
 <p class="muted">Generated at {{ data.summary.generated_at }}</p>
 
+<div class="actions">
+    <form method="get" action="{{ url_for('admin.dashboard') }}" class="inline-form">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="field">
+            <label for="date">Occupancy date</label>
+            <input type="date" id="date" name="date" value="{{ travel_date }}" data-travel-date>
+        </div>
+        <button class="button" type="submit">Apply</button>
+    </form>
+    <a class="button ghost" href="{{ url_for('admin.trains', key=key) }}">Manage trains</a>
+    <a class="button ghost" href="{{ url_for('admin.audit_log', key=key) }}">Audit log</a>
+    <a class="button ghost" href="{{ url_for('admin.outbox', key=key) }}">Notification outbox</a>
+    <a class="button ghost" href="{{ url_for('admin.export_bookings', key=key) }}">Bookings CSV</a>
+    <a class="button ghost" href="{{ url_for('admin.export_refunds', key=key) }}">Refunds CSV</a>
+    <a class="button ghost" href="{{ url_for('admin.export_manifest', key=key, date=travel_date) }}">Manifest CSV</a>
+    <a class="button ghost" href="{{ url_for('admin.backup', key=key) }}">Download backup</a>
+</div>
+
 <div class="stat-grid">
     <div class="stat"><span class="muted">Bookings</span><strong>{{ data.summary.bookings }}</strong></div>
     <div class="stat"><span class="muted">Confirmed</span><strong>{{ data.summary.confirmed }}</strong></div>
@@ -101,5 +119,65 @@
     {% endif %}
 </div>
 
-<a class="button ghost" href="{{ url_for('admin.outbox', key=key) }}">Notification outbox</a>
+<div class="grid-2">
+    <div class="card">
+        <h2>Occupancy by class &mdash; {{ travel_date }}</h2>
+        {% if data.occupancy %}
+            <table class="data">
+                <thead><tr><th>Class</th><th>Coaches</th><th>Booked / seats</th><th>Load</th></tr></thead>
+                <tbody>
+                    {% for row in data.occupancy %}
+                        {% set pct = (row.booked / row.seats * 100) | round(1) if row.seats else 0 %}
+                        <tr>
+                            <td>{{ class_names.get(row.class_code, row.class_code) }}</td>
+                            <td>{{ row.coaches }}</td>
+                            <td>{{ row.booked }} / {{ row.seats }}</td>
+                            <td>
+                                <div class="bar-track"><div class="bar-fill" style="width: {{ pct }}%"></div></div>
+                                <span class="muted">{{ pct }}%</span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No coach data.</p>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h2>Concessions</h2>
+        <p class="muted">Waived Rs {{ data.concessions.waived }} &middot; Collected Rs {{ data.concessions.collected }}</p>
+        <table class="data">
+            <thead><tr><th>Passenger type</th><th>Count</th><th>Fare</th></tr></thead>
+            <tbody>
+                {% for row in data.concessions.by_type %}
+                    <tr><td>{{ row.passenger_type }}</td><td>{{ row.passengers }}</td><td>Rs {{ row.fare }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Recent activity</h2>
+    {% if data.audit %}
+        <table class="data">
+            <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Ref</th><th>Detail</th></tr></thead>
+            <tbody>
+                {% for entry in data.audit %}
+                    <tr>
+                        <td>{{ entry.created_at }}</td>
+                        <td><span class="status">{{ entry.action }}</span></td>
+                        <td>{{ entry.entity }}</td>
+                        <td>{{ entry.entity_id or '-' }}</td>
+                        <td>{{ entry.detail or '-' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p><a class="button ghost" href="{{ url_for('admin.audit_log', key=key) }}">View full audit log</a></p>
+    {% else %}
+        <p class="muted">No activity recorded yet.</p>
+    {% endif %}
+</div>
 {% endblock %}

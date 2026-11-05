@@ -40,7 +40,7 @@ def get_booking_by_pnr(conn, pnr):
     passengers = conn.execute(
         """
         SELECT id, name, age, gender, preference, status,
-               coach_name, seat_number, berth_type
+               coach_name, seat_number, berth_type, concession_percent, fare
         FROM passengers
         WHERE booking_id = ?
         ORDER BY id
@@ -58,11 +58,32 @@ def get_booking_by_pnr(conn, pnr):
         (booking["id"],),
     ).fetchall()
 
+    changes = conn.execute(
+        """
+        SELECT old_date, new_date, old_from_seq, old_to_seq, new_from_seq, new_to_seq,
+               fee, created_at
+        FROM booking_changes WHERE booking_id = ? ORDER BY id DESC
+        """,
+        (booking["id"],),
+    ).fetchall()
+
+    group = []
+    if booking["group_id"]:
+        group = conn.execute(
+            """
+            SELECT pnr, travel_date, class_code, status, total_fare
+            FROM bookings WHERE group_id = ? ORDER BY travel_date
+            """,
+            (booking["group_id"],),
+        ).fetchall()
+
     return {
         "booking": dict(booking),
         "passengers": [dict(p) for p in passengers],
         "refunds": [dict(r) for r in refunds],
         "payments": [dict(p) for p in payments],
+        "changes": [dict(c) for c in changes],
+        "group": [dict(g) for g in group],
     }
 
 

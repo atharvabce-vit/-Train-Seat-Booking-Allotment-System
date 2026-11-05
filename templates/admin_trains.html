@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Manage trains{% endblock %}
+
+{% block content %}
+<h1>Manage trains</h1>
+<p class="muted">Add trains, then configure their halts and coaches.</p>
+
+<div class="card">
+    <h2>Add a train</h2>
+    <form method="post" action="{{ url_for('admin.create_train') }}" class="inline-form">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="field">
+            <label for="train_number">Train number</label>
+            <input type="text" id="train_number" name="train_number" maxlength="5" required>
+        </div>
+        <div class="field">
+            <label for="train_name">Train name</label>
+            <input type="text" id="train_name" name="train_name" required>
+        </div>
+        <div class="field">
+            <label for="runs_on">Runs on</label>
+            <input type="text" id="runs_on" name="runs_on" value="Daily">
+        </div>
+        <button class="button" type="submit">Create train</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>All trains</h2>
+    {% if trains %}
+        <table class="data">
+            <thead>
+                <tr><th>Number</th><th>Name</th><th>Runs on</th><th>Stops</th><th>Coaches</th><th>Seats</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for train in trains %}
+                    <tr>
+                        <td>{{ train.train_number }}</td>
+                        <td>{{ train.train_name }}</td>
+                        <td>{{ train.runs_on }}</td>
+                        <td>{{ train.stops }}</td>
+                        <td>{{ train.coaches }}</td>
+                        <td>{{ train.seats }}</td>
+                        <td>
+                            <a class="button ghost" href="{{ url_for('admin.train_detail', train_id=train.id, key=key) }}">Manage</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No trains yet.</p>
+    {% endif %}
+</div>
+
+<a class="back" href="{{ url_for('admin.dashboard', key=key) }}">&larr; Back to dashboard</a>
+{% endblock %}

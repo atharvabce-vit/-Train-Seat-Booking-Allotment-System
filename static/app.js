@@ -2,7 +2,55 @@ document.addEventListener('DOMContentLoaded', function () {
     initTravelDates();
     initStationAutocomplete();
     initPassengerRows();
+    initSeatMap();
 });
+
+function initSeatMap() {
+    var node = document.getElementById('seatmap');
+    if (!node) {
+        return;
+    }
+    var params = new URLSearchParams({
+        train_id: node.dataset.train,
+        cls: node.dataset.cls,
+        date: node.dataset.date,
+        from_seq: node.dataset.from,
+        to_seq: node.dataset.to,
+        quota: node.dataset.quota
+    });
+
+    fetch('/api/seatmap?' + params.toString())
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            node.innerHTML = '';
+            var coaches = data.coaches || [];
+            if (!coaches.length) {
+                node.innerHTML = '<p class="muted">No seats to display.</p>';
+                return;
+            }
+            coaches.forEach(function (coach) {
+                var box = document.createElement('div');
+                box.className = 'coach';
+                var title = document.createElement('h4');
+                title.textContent = coach.name;
+                box.appendChild(title);
+                var grid = document.createElement('div');
+                grid.className = 'seat-grid';
+                coach.seats.forEach(function (seat) {
+                    var cell = document.createElement('span');
+                    cell.className = 'seat seat-' + seat.status;
+                    cell.title = seat.berth_type;
+                    cell.textContent = seat.seat_number;
+                    grid.appendChild(cell);
+                });
+                box.appendChild(grid);
+                node.appendChild(box);
+            });
+        })
+        .catch(function () {
+            node.innerHTML = '<p class="muted">Seat map unavailable right now.</p>';
+        });
+}
 
 function initTravelDates() {
     var today = new Date();

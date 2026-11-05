@@ -2,6 +2,9 @@
 {% block title %}E-Ticket {{ record.booking.pnr }}{% endblock %}
 
 {% block content %}
+{% set step = 3 %}
+{% include "_stepper.html" %}
+
 {% set b = record.booking %}
 <div class="ticket">
     <div class="ticket-head">
@@ -96,9 +99,50 @@
 
 <div class="actions">
     <a class="button" href="{{ url_for('booking.ticket_pdf', pnr=b.pnr) }}">Download PDF</a>
+    <a class="button ghost" href="{{ url_for('booking.ticket_ics', pnr=b.pnr) }}">Add to calendar (.ics)</a>
     <button type="button" class="button ghost" onclick="window.print()">Print</button>
     <a class="button ghost" href="{{ url_for('booking.pnr_status', pnr=b.pnr) }}">PNR status</a>
 </div>
+
+{% if b.trip_type == 'ROUND_TRIP' and record.group %}
+    <div class="card">
+        <h2>Round trip group</h2>
+        <p class="muted">These bookings were made together. The return leg carries a 5% discount.</p>
+        <table class="data">
+            <thead><tr><th>PNR</th><th>Date</th><th>Class</th><th>Status</th><th>Fare</th></tr></thead>
+            <tbody>
+                {% for leg in record.group %}
+                    <tr>
+                        <td><a href="{{ url_for('booking.ticket', pnr=leg.pnr) }}">{{ leg.pnr }}</a></td>
+                        <td>{{ leg.travel_date }}</td>
+                        <td>{{ class_names.get(leg.class_code, leg.class_code) }}</td>
+                        <td><span class="status status-{{ leg.status }}">{{ leg.status|upper }}</span></td>
+                        <td>Rs {{ leg.total_fare }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{% if record.changes %}
+    <div class="card">
+        <h2>Reschedule history</h2>
+        <table class="data">
+            <thead><tr><th>When</th><th>Old date</th><th>New date</th><th>Change fee</th></tr></thead>
+            <tbody>
+                {% for change in record.changes %}
+                    <tr>
+                        <td>{{ change.created_at }}</td>
+                        <td>{{ change.old_date }}</td>
+                        <td>{{ change.new_date }}</td>
+                        <td>Rs {{ change.fee }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
 
 {% if b.status != 'cancelled' %}
     <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}"

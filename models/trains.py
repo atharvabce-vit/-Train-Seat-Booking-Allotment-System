@@ -12,6 +12,46 @@ from models.util import (
     parse_time,
 )
 
+# Cycling berth layout per class, used whenever a coach is created.
+BERTH_PATTERNS = {
+    "SL": ["LB", "MB", "UB", "LB", "MB", "UB", "SL", "SU"],
+    "3A": ["LB", "MB", "UB", "LB", "MB", "UB", "SL", "SU"],
+    "2A": ["LB", "UB", "LB", "UB", "SL", "SU"],
+    "1A": ["LB", "UB", "SL", "SU"],
+}
+
+COACH_PREFIX = {"SL": "S", "3A": "B", "2A": "A", "1A": "H"}
+
+
+def create_coach(conn, train_id, coach_name, class_code, seat_count, tatkal_seats=0, position=0):
+    """Insert a coach and its seats, returning the new coach id."""
+    cursor = conn.execute(
+        """
+        INSERT INTO coaches
+            (train_id, coach_name, class_code, seat_count, tatkal_seats, position)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (train_id, coach_name, class_code, seat_count, tatkal_seats, position),
+    )
+    coach_id = cursor.lastrowid
+    pattern = BERTH_PATTERNS.get(class_code, BERTH_PATTERNS["SL"])
+    for seat_number in range(1, seat_count + 1):
+        berth = pattern[(seat_number - 1) % len(pattern)]
+        conn.execute(
+            "INSERT INTO seats (coach_id, seat_number, berth_type) VALUES (?, ?, ?)",
+            (coach_id, seat_number, berth),
+        )
+    return coach_id
+
+
+def next_coach_name(conn, train_id, class_code):
+    count = conn.execute(
+        "SELECT COUNT(*) AS c FROM coaches WHERE train_id = ? AND class_code = ?",
+        (train_id, class_code),
+    ).fetchone()["c"]
+    return f"{COACH_PREFIX.get(class_code, 'X')}{count + 1}"
+
+
 
 def get_train(conn, train_id):
     if not train_id:

@@ -2,6 +2,9 @@
 {% block title %}Book {{ train.train_number }}{% endblock %}
 
 {% block content %}
+{% set step = 1 %}
+{% include "_stepper.html" %}
+
 <a class="back" href="{{ url_for('main.search', source=from_stop.city, destination=to_stop.city, date=travel_date) }}">&larr; Back to results</a>
 
 <div class="card">
@@ -87,8 +90,36 @@
     </div>
 
     <div class="card">
+        <h2>Coach seat map</h2>
+        <p class="muted">
+            Green seats are free on this leg, grey are already booked. Seats are allotted
+            automatically (consecutive seats first) when you continue.
+        </p>
+        <div id="seatmap"
+             data-train="{{ train.id }}" data-cls="{{ selected_class }}"
+             data-date="{{ travel_date }}" data-from="{{ from_seq }}"
+             data-to="{{ to_seq }}" data-quota="{{ quota }}"></div>
+    </div>
+
+    <div class="card">
+        <h2>Fare &amp; availability for the next {{ calendar | length }} days</h2>
+        <p class="muted">Tap a day to check availability for that date. Same class and leg.</p>
+        <div class="fare-calendar">
+            {% for day in calendar %}
+                <a class="cal-day {% if day.date == travel_date %}selected{% endif %} {% if day.available == 0 %}soldout{% endif %}"
+                   href="{{ url_for('booking.book', train_id=train.id, cls=selected_class, date=day.date, from_seq=from_seq, to_seq=to_seq, quota=quota) }}">
+                    <span class="cal-weekday">{{ day.weekday }}</span>
+                    <span class="cal-date">{{ day.date[5:] }}</span>
+                    <span class="cal-fare">Rs {{ day.fare }}</span>
+                    <span class="cal-avail">{{ day.available }} left</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
         <h2>Passengers</h2>
-        <p class="muted">Maximum 6 passengers per PNR. Seniors (58+) are automatically given a lower berth.</p>
+        <p class="muted">Maximum 6 passengers per PNR. Seniors (58+) are automatically given a lower berth. Children (≤11) get 50% off and infants (≤4) travel free.</p>
         <table class="passenger-table">
             <thead>
                 <tr>

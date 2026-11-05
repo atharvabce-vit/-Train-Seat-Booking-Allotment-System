@@ -385,6 +385,20 @@ th {
     color: #12355b;
 }
 
+.bar-track {
+    background: #e5e7eb;
+    border-radius: 6px;
+    height: 10px;
+    width: 140px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    background: #1d6fd6;
+    height: 100%;
+    border-radius: 6px;
+}
+
 .ticket {
     background: #fff;
     border-radius: 8px;
@@ -478,8 +492,173 @@ pre code {
     font-size: 13px;
 }
 
+.stepper {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.stepper .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: #eef2f7;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.stepper .step.active {
+    background: #e8eff9;
+    color: #12355b;
+    font-weight: 600;
+}
+
+.step-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    color: #fff;
+    font-size: 12px;
+}
+
+.stepper .step.active .step-dot {
+    background: #1d6fd6;
+}
+
+.fare-calendar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.cal-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    text-decoration: none;
+    color: #12355b;
+    font-size: 12px;
+}
+
+.cal-day:hover {
+    border-color: #1d6fd6;
+}
+
+.cal-day.selected {
+    border-color: #1d6fd6;
+    box-shadow: 0 0 0 2px rgba(29, 111, 214, 0.25);
+}
+
+.cal-day.soldout {
+    background: #f8fafc;
+    color: #9ca3af;
+}
+
+.cal-weekday {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.cal-fare {
+    color: #15803d;
+}
+
+.cal-day.soldout .cal-fare {
+    color: #9ca3af;
+}
+
+.cal-avail {
+    font-size: 10px;
+    color: #6b7280;
+}
+
+#seatmap .coach {
+    margin-bottom: 14px;
+}
+
+#seatmap .coach h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    color: #12355b;
+}
+
+.seat-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.seat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    font-size: 10px;
+    border: 1px solid #d1d5db;
+}
+
+.seat-available {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #86efac;
+}
+
+.seat-booked {
+    background: #e5e7eb;
+    color: #9ca3af;
+}
+
+.trip-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.trip-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.trip-option:hover {
+    border-color: #1d6fd6;
+}
+
+.trip-option.chosen {
+    border-color: #1d6fd6;
+    box-shadow: 0 0 0 2px rgba(29, 111, 214, 0.25);
+}
+
+.trip-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 @media print {
-    .site-header, .site-footer, .actions, .back, button, form {
+    .site-header, .site-footer, .actions, .back, .stepper, button, form {
         display: none;
     }
 

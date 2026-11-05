@@ -22,6 +22,10 @@
     <button type="submit">Search</button>
 </form>
 
+{% if source and destination %}
+    <p><a class="button ghost" href="{{ url_for('booking.round_trip', source=source, destination=destination, date=travel_date) }}">Book a round trip instead</a></p>
+{% endif %}
+
 {% if trains is not none %}
     <h2>Results {% if travel_date %}<span class="muted">for {{ travel_date }}</span>{% endif %}</h2>
     {% if trains %}

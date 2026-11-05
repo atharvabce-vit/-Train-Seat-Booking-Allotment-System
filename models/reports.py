@@ -153,5 +153,51 @@ def revenue_by_day(conn, days=7):
     return [dict(row) for row in rows]
 
 
+def concession_totals(conn):
+    row = conn.execute(
+        """
+        SELECT COALESCE(SUM(concession_amount), 0) AS waived,
+               COALESCE(SUM(total_fare), 0) AS collected
+        FROM bookings WHERE status != 'cancelled'
+        """
+    ).fetchone()
+    by_type = conn.execute(
+        """
+        SELECT CASE
+                   WHEN concession_percent = 100 THEN 'Infant'
+                   WHEN concession_percent = 50 THEN 'Child'
+                   WHEN concession_percent = 30 THEN 'Senior'
+                   ELSE 'Adult'
+               END AS passenger_type,
+               COUNT(*) AS passengers,
+               COALESCE(SUM(fare), 0) AS fare
+        FROM passengers
+        GROUP BY passenger_type
+        ORDER BY passengers DESC
+        """
+    ).fetchall()
+    return {"waived": row["waived"], "collected": row["collected"],
+            "by_type": [dict(r) for r in by_type]}
+
+
+def class_occupancy(conn, travel_date):
+    """Seats booked per class on a date, for the dashboard heatmap."""
+    rows = conn.execute(
+        """
+        SELECT c.class_code,
+               COUNT(DISTINCT c.id) AS coaches,
+               COALESCE(SUM(c.seat_count), 0) AS seats,
+               COUNT(DISTINCT CASE WHEN si.status = 'booked' THEN si.seat_id END) AS booked
+        FROM coaches c
+        LEFT JOIN seats s ON s.coach_id = c.id
+        LEFT JOIN seat_inventory si ON si.seat_id = s.id AND si.travel_date = ?
+        GROUP BY c.class_code
+        ORDER BY c.class_code
+        """,
+        (travel_date,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def today():
     return now_utc().date().isoformat()

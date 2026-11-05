@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Book a round trip{% endblock %}
+
+{% block content %}
+{% set step = 1 %}
+{% include "_stepper.html" %}
+
+<h1>Round trip booking</h1>
+<p class="muted">Book an outbound and a return journey together. The return leg gets a 5% discount.</p>
+
+<form class="card search-form" method="get" action="{{ url_for('booking.round_trip') }}">
+    <div class="field">
+        <label for="source">From</label>
+        <input type="text" id="source" name="source" value="{{ source }}"
+               placeholder="City or station" autocomplete="off" data-stations required>
+    </div>
+    <div class="field">
+        <label for="destination">To</label>
+        <input type="text" id="destination" name="destination" value="{{ destination }}"
+               placeholder="City or station" autocomplete="off" data-stations required>
+    </div>
+    <div class="field">
+        <label for="date">Departure date</label>
+        <input type="date" id="date" name="date" value="{{ depart_date }}" data-travel-date>
+    </div>
+    <div class="field">
+        <label for="return_date">Return date</label>
+        <input type="date" id="return_date" name="return_date" value="{{ return_date }}" data-travel-date>
+    </div>
+    <button type="submit">Find trains</button>
+</form>
+
+{% if outbound is not none %}
+    <form method="post" action="{{ url_for('booking.create_round_trip') }}">
+        <input type="hidden" name="source" value="{{ source }}">
+        <input type="hidden" name="destination" value="{{ destination }}">
+        <input type="hidden" name="outbound_date" value="{{ depart_date }}">
+        <input type="hidden" name="return_date" value="{{ return_date }}">
+
+        <div class="card">
+            <h2>Outbound &mdash; {{ source }} &rarr; {{ destination }}</h2>
+            {% if outbound %}
+                <div class="trip-list">
+                    {% for train in outbound %}
+                        <label class="trip-option">
+                            <input type="radio" name="outbound_leg" value="{{ train.id }}|{{ train.from_seq }}|{{ train.to_seq }}" required>
+                            <span class="trip-main">
+                                <strong>{{ train.train_number }} &mdash; {{ train.train_name }}</strong>
+                                <span class="muted">
+                                    {{ train.from_name }} ({{ train.depart_label }}) &rarr;
+                                    {{ train.to_name }} ({{ train.arrive_label }}) &middot;
+                                    {{ train.distance_km }} km &middot; {{ train.duration }}
+                                </span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">No outbound trains found for this route.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Return &mdash; {{ destination }} &rarr; {{ source }}</h2>
+            {% if inbound %}
+                <div class="trip-list">
+                    {% for train in inbound %}
+                        <label class="trip-option">
+                            <input type="radio" name="return_leg" value="{{ train.id }}|{{ train.from_seq }}|{{ train.to_seq }}" required>
+                            <span class="trip-main">
+                                <strong>{{ train.train_number }} &mdash; {{ train.train_name }}</strong>
+                                <span class="muted">
+                                    {{ train.from_name }} ({{ train.depart_label }}) &rarr;
+                                    {{ train.to_name }} ({{ train.arrive_label }}) &middot;
+                                    {{ train.distance_km }} km &middot; {{ train.duration }}
+                                </span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">No return trains found for this route.</p>
+            {% endif %}
+        </div>
+
+        {% if outbound and inbound %}
+            <div class="card">
+                <div class="field">
+                    <label for="class_code">Class (both legs)</label>
+                    <select id="class_code" name="class_code">
+                        {% for code in classes %}
+                            <option value="{{ code }}">{{ class_names.get(code, code) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="quota">Quota</label>
+                    <select id="quota" name="outbound_quota">
+                        {% for code, label in quota_names.items() %}
+                            <option value="{{ code }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Passengers</h2>
+                <p class="muted">Same passengers travel on both legs. Maximum 6 per PNR.</p>
+                <table class="passenger-table">
+                    <thead>
+                        <tr><th>Name</th><th>Age</th><th>Gender</th><th>Berth preference</th><th></th></tr>
+                    </thead>
+                    <tbody id="passenger-rows"></tbody>
+                </table>
+                <button type="button" class="ghost" id="add-passenger">+ Add passenger</button>
+            </div>
+
+            <div class="card">
+                <h2>Contact details</h2>
+                <div class="field">
+                    <label for="user_name">Full name</label>
+                    <input type="text" id="user_name" name="user_name" required>
+                </div>
+                <div class="field">
+                    <label for="user_email">E-mail</label>
+                    <input type="email" id="user_email" name="user_email" required>
+                </div>
+                <div class="field">
+                    <label for="user_phone">Phone (optional)</label>
+                    <input type="text" id="user_phone" name="user_phone">
+                </div>
+            </div>
+
+            <button type="submit" class="primary">Book round trip</button>
+        {% endif %}
+    </form>
+
+    <template id="passenger-row-template">
+        <tr>
+            <td><input type="text" name="passenger_name" placeholder="Full name" required></td>
+            <td><input type="number" name="passenger_age" min="1" max="120" required></td>
+            <td>
+                <select name="passenger_gender">
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                    <option value="O">Other</option>
+                </select>
+            </td>
+            <td>
+                <select name="passenger_preference">
+                    {% for code, label in berth_names.items() %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><button type="button" class="remove-row">&times;</button></td>
+        </tr>
+    </template>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll('input[name="outbound_leg"], input[name="return_leg"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            document.querySelectorAll('input[name="' + this.name + '"]').forEach(function (peer) {
+                peer.closest('.trip-option').classList.toggle('chosen', peer.checked);
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ train.train_number }} {{ train.train_name }}{% endblock %}
+
+{% block content %}
+<h1>{{ train.train_number }} &middot; {{ train.train_name }}</h1>
+<p class="muted">Runs on: {{ train.runs_on }}</p>
+
+<div class="card">
+    <h2>Train details</h2>
+    <form method="post" action="{{ url_for('admin.edit_train', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="field">
+            <label for="train_name">Name</label>
+            <input type="text" id="train_name" name="train_name" value="{{ train.train_name }}" required>
+        </div>
+        <div class="field">
+            <label for="runs_on">Runs on</label>
+            <input type="text" id="runs_on" name="runs_on" value="{{ train.runs_on }}">
+        </div>
+        <button class="button" type="submit">Save</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Halts ({{ stops | length }})</h2>
+    {% if stops %}
+        <table class="data">
+            <thead>
+                <tr><th>Seq</th><th>Station</th><th>Arrival</th><th>Departure</th><th>Day</th><th>Distance (km)</th></tr>
+            </thead>
+            <tbody>
+                {% for stop in stops %}
+                    <tr>
+                        <td>{{ stop.seq }}</td>
+                        <td>{{ stop.station_name }} ({{ stop.station_code }})</td>
+                        <td>{{ stop.arrival_time or '-' }}</td>
+                        <td>{{ stop.departure_time or '-' }}</td>
+                        <td>{{ stop.day_offset }}</td>
+                        <td>{{ stop.distance_from_source }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No halts configured. Add at least two to enable booking.</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin.add_stop', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="field">
+            <label for="station_code">Station</label>
+            <select id="station_code" name="station_code" required>
+                {% for station in stations %}
+                    <option value="{{ station.code }}">{{ station.city }} - {{ station.name }} ({{ station.code }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="seq">Seq</label>
+            <input type="number" id="seq" name="seq" min="1" required>
+        </div>
+        <div class="field">
+            <label for="arrival_time">Arrival</label>
+            <input type="text" id="arrival_time" name="arrival_time" placeholder="HH:MM">
+        </div>
+        <div class="field">
+            <label for="departure_time">Departure</label>
+            <input type="text" id="departure_time" name="departure_time" placeholder="HH:MM">
+        </div>
+        <div class="field">
+            <label for="day_offset">Day</label>
+            <input type="number" id="day_offset" name="day_offset" min="0" value="0">
+        </div>
+        <div class="field">
+            <label for="distance_from_source">Distance (km)</label>
+            <input type="number" id="distance_from_source" name="distance_from_source" min="0" value="0">
+        </div>
+        <button class="button" type="submit">Add halt</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Coaches ({{ coaches | length }})</h2>
+    {% if coaches %}
+        <table class="data">
+            <thead>
+                <tr><th>Coach</th><th>Class</th><th>Seats</th><th>Tatkal seats</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for coach in coaches %}
+                    <tr>
+                        <td>{{ coach.coach_name }}</td>
+                        <td>{{ class_names.get(coach.class_code, coach.class_code) }}</td>
+                        <td>{{ coach.seat_count }}</td>
+                        <td>{{ coach.tatkal_seats }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('admin.delete_coach', coach_id=coach.id) }}" class="inline">
+                                <input type="hidden" name="key" value="{{ key }}">
+                                <button class="button ghost danger" type="submit">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No coaches yet.</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin.add_coach', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="field">
+            <label for="class_code">Class</label>
+            <select id="class_code" name="class_code">
+                {% for code in class_options %}
+                    <option value="{{ code }}">{{ class_names.get(code, code) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="coach_name">Coach name</label>
+            <input type="text" id="coach_name" name="coach_name" placeholder="auto">
+        </div>
+        <div class="field">
+            <label for="seat_count">Seats</label>
+            <input type="number" id="seat_count" name="seat_count" min="1" value="72" required>
+        </div>
+        <div class="field">
+            <label for="tatkal_seats">Tatkal seats</label>
+            <input type="number" id="tatkal_seats" name="tatkal_seats" min="0" value="0">
+        </div>
+        <button class="button" type="submit">Add coach</button>
+    </form>
+</div>
+
+<a class="back" href="{{ url_for('admin.trains', key=key) }}">&larr; Back to trains</a>
+{% endblock %}

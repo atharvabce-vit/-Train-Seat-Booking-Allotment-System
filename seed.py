@@ -1,13 +1,6 @@
 from db import create_tables, get_connection
-
-BERTH_PATTERNS = {
-    "SL": ["LB", "MB", "UB", "LB", "MB", "UB", "SL", "SU"],
-    "3A": ["LB", "MB", "UB", "LB", "MB", "UB", "SL", "SU"],
-    "2A": ["LB", "UB", "LB", "UB", "SL", "SU"],
-    "1A": ["LB", "UB", "SL", "SU"],
-}
-
-COACH_PREFIX = {"SL": "S", "3A": "B", "2A": "A", "1A": "H"}
+from models.api_auth import ensure_default_token
+from models.trains import COACH_PREFIX, create_coach
 
 DEFAULT_PLAN = {
     "SL": (3, 72),
@@ -189,30 +182,16 @@ def create_train(conn, train_number, train_name, source, destination,
         )
 
     for class_code, (num_coaches, seat_count) in plan.items():
-        pattern = BERTH_PATTERNS[class_code]
         tatkal_seats = int(seat_count * tatkal_ratio)
         for index in range(1, num_coaches + 1):
             coach_name = f"{COACH_PREFIX[class_code]}{index}"
-            coach_cursor = conn.execute(
-                """
-                INSERT INTO coaches
-                    (train_id, coach_name, class_code, seat_count, tatkal_seats, position)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (train_id, coach_name, class_code, seat_count, tatkal_seats, index),
-            )
-            coach_id = coach_cursor.lastrowid
-            for seat_number in range(1, seat_count + 1):
-                berth = pattern[(seat_number - 1) % len(pattern)]
-                conn.execute(
-                    "INSERT INTO seats (coach_id, seat_number, berth_type) VALUES (?, ?, ?)",
-                    (coach_id, seat_number, berth),
-                )
+            create_coach(conn, train_id, coach_name, class_code, seat_count, tatkal_seats, index)
     return train_id
 
 
 def create_sample_data(conn):
     seed_stations(conn)
+    ensure_default_token(conn)
 
     users = [
         ("Aarav Sharma", "aarav@example.com", "9876543210"),

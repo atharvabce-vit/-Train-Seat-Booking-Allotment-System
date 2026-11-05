@@ -48,9 +48,30 @@ TATKAL_WINDOW_HOURS = 24
 
 SENIOR_AGE = 58
 
+# Concession: percentage of the base fare waived, picked by passenger age.
+INFANT_MAX_AGE = 4
+INFANT_CONCESSION_PCT = 100
+CHILD_MAX_AGE = 11
+CHILD_CONCESSION_PCT = 50
+SENIOR_CONCESSION_PCT = 30
+
+# Reschedule / date change fee (percentage of the paid fare, with a floor).
+RESCHEDULE_FEE_PCT = 10
+RESCHEDULE_FEE_MIN = 50
+
+# Round-trip bookings get this discount off the return leg.
+ROUND_TRIP_DISCOUNT_PCT = 5
+
 RAC_LIMIT = 10
 
 HOLD_TTL_SECONDS = 600
+
+# REST API guard: token required for writes, N requests per window per token.
+API_RATE_LIMIT = 60
+API_RATE_WINDOW = 60
+DEFAULT_API_TOKEN = "demo-token-123"
+
+LOG_LEVEL = "INFO"
 
 # (hours still left before departure, refund percent). The first rule whose
 # threshold the booking still clears is the one that applies.
