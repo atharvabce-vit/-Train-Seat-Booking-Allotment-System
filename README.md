@@ -10,10 +10,6 @@ calendar and an interactive seat map are all supported, and the whole thing is
 also exposed over a **JSON REST API** (token-protected, documented with OpenAPI)
 with an **admin dashboard**.
 
-**End-to-end flow:** Search (From / To / Date) → Results → pick Class + Quota →
-availability + fare per class → passenger form → seat hold → Confirm (mock
-payment) → PNR + ticket → PDF / QR / verify.
-
 Deliberately out of scope: a real payment gateway (payments are mocked),
 login/auth (a name + e-mail identifies the booker), real chart preparation, and
 distributed locks — concurrency is handled by SQLite write transactions.
