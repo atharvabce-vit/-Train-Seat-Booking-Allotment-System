@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Search Trains{% endblock %}
+
+{% block content %}
+<h1>Search Trains</h1>
+
+<form class="card search-form" method="get" action="{{ url_for('search') }}">
+    <div class="field">
+        <label for="source">From</label>
+        <input type="text" id="source" name="source" value="{{ source }}" placeholder="e.g. Mumbai" required>
+    </div>
+    <div class="field">
+        <label for="destination">To</label>
+        <input type="text" id="destination" name="destination" value="{{ destination }}" placeholder="e.g. Delhi" required>
+    </div>
+    <div class="field">
+        <label for="date">Travel Date</label>
+        <input type="date" id="date" name="date" value="{{ travel_date }}">
+    </div>
+    <button type="submit">Search</button>
+</form>
+
+{% if trains is not none %}
+    <h2>Results</h2>
+    {% if trains %}
+        {% for train in trains %}
+            <div class="card train-card">
+                <div class="train-info">
+                    <h3>{{ train.train_number }} &mdash; {{ train.train_name }}</h3>
+                    <p>{{ train.source }} ({{ train.depart_time }}) &rarr; {{ train.destination }} ({{ train.arrive_time }})</p>
+                </div>
+                <form class="inline-form" method="get" action="{{ url_for('book') }}">
+                    <input type="hidden" name="train_id" value="{{ train.id }}">
+                    <input type="hidden" name="date" value="{{ travel_date }}">
+                    <select name="class_code">
+                        {% for code, label in class_names.items() %}
+                            <option value="{{ code }}">{{ label }} ({{ code }}) &mdash; Rs {{ fares[code] }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Book</button>
+                </form>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted">No trains found for this route.</p>
+    {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,275 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: #eef2f7;
+    color: #1f2937;
+}
+
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: #12355b;
+    color: #fff;
+}
+
+.brand {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+}
+
+.site-header nav a {
+    color: #d6e4f5;
+    margin-left: 18px;
+    text-decoration: none;
+}
+
+.site-header nav a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+}
+
+.card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 4px rgba(15, 40, 80, 0.12);
+}
+
+h1 {
+    margin-top: 0;
+}
+
+h2, h3 {
+    margin-top: 0;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+}
+
+.field label {
+    font-size: 13px;
+    color: #4b5563;
+    margin-bottom: 4px;
+}
+
+input, select {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+button {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 5px;
+    background: #1d6fd6;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #175bb0;
+}
+
+button:disabled {
+    background: #9aa7b8;
+    cursor: not-allowed;
+}
+
+button.danger {
+    background: #c0392b;
+}
+
+button.danger:hover {
+    background: #962d22;
+}
+
+.button-link {
+    display: inline-block;
+    padding: 9px 18px;
+    border-radius: 5px;
+    background: #1d6fd6;
+    color: #fff;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.search-form,
+.inline-form {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.search-form .field,
+.inline-form .field {
+    flex: 1 1 180px;
+    margin-bottom: 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.train-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.train-info h3 {
+    margin: 0 0 4px;
+}
+
+.train-info p {
+    margin: 0;
+    color: #4b5563;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+}
+
+th {
+    background: #f3f6fb;
+}
+
+.flash {
+    background: #fff5d6;
+    border-left: 4px solid #e0a800;
+    padding: 10px 14px;
+    border-radius: 5px;
+    margin-bottom: 16px;
+}
+
+.flash p {
+    margin: 0;
+}
+
+.ticket .ticket-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px dashed #cbd5e1;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+}
+
+.pnr-box {
+    text-align: right;
+}
+
+.pnr-box span {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.pnr-box strong {
+    font-size: 24px;
+    letter-spacing: 2px;
+}
+
+.grid p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.grid p span {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.fare-box {
+    background: #f3f6fb;
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+}
+
+.fare-box p {
+    margin: 4px 0;
+    font-size: 14px;
+}
+
+.fare-box .fare-total {
+    font-size: 16px;
+}
+
+.status-confirmed {
+    color: #15803d;
+}
+
+.status-cancelled {
+    color: #b91c1c;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 18px;
+    flex-wrap: wrap;
+}
+
+.muted {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.site-footer {
+    text-align: center;
+    padding: 18px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+@media print {
+    .site-header, .site-footer, .actions {
+        display: none;
+    }
+
+    body {
+        background: #fff;
+    }
+
+    .card {
+        box-shadow: none;
+    }
+}

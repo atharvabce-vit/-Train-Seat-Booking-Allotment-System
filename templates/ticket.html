@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Ticket {{ record.booking.pnr }}{% endblock %}
+
+{% block content %}
+{% set b = record.booking %}
+<div class="card ticket">
+    <div class="ticket-head">
+        <div>
+            <h1>E-Ticket</h1>
+            <p class="muted">RailYatra &mdash; Train Seat Booking &amp; Seat Allotment System</p>
+        </div>
+        <div class="pnr-box">
+            <span>PNR</span>
+            <strong>{{ b.pnr }}</strong>
+        </div>
+    </div>
+
+    <div class="grid">
+        <p><span>Train</span>{{ b.train_number }} &mdash; {{ b.train_name }}</p>
+        <p><span>Class</span>{{ class_names.get(b.class_code, b.class_code) }} ({{ b.class_code }})</p>
+        <p><span>From</span>{{ b.source }} ({{ b.depart_time }})</p>
+        <p><span>To</span>{{ b.destination }} ({{ b.arrive_time }})</p>
+        <p><span>Travel Date</span>{{ b.travel_date }}</p>
+        <p><span>Status</span>
+            <strong class="status-{{ b.status }}">{{ b.status|upper }}</strong>
+        </p>
+        <p><span>Booked By</span>{{ b.user_name }}</p>
+        <p><span>Total Fare</span>INR {{ b.total_fare }}</p>
+    </div>
+
+    <h3>Passengers</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Gender</th>
+                <th>Coach</th>
+                <th>Seat</th>
+                <th>Berth</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in record.passengers %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.age }}</td>
+                    <td>{{ p.gender }}</td>
+                    <td>{{ p.coach_name }}</td>
+                    <td>{{ p.seat_number }}</td>
+                    <td>{{ p.berth_type }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="actions">
+        <button type="button" onclick="window.print()">Print Ticket</button>
+        <a class="button-link" href="{{ url_for('pnr_status', pnr=b.pnr) }}">Check PNR</a>
+    </div>
+</div>
+{% endblock %}
