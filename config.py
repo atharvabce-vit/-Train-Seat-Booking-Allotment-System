@@ -111,6 +111,10 @@ RAC_LIMIT = 10
 
 HOLD_TTL_SECONDS = 600
 
+# A train's chart is prepared this many hours before departure: RAC and
+# waitlisted bookings are finalised and online booking closes.
+CHART_LEAD_HOURS = 4
+
 # REST API guard: token required for writes, N requests per window per token.
 API_RATE_LIMIT = 60
 API_RATE_WINDOW = 60
@@ -138,3 +142,7 @@ ADMIN_KEY = "railyatra-admin"
 DEFAULT_PAYMENT_METHOD = "MOCK"
 
 PAYMENT_METHODS = ["MOCK", "UPI", "CARD", "NETBANKING"]
+
+# Typo-tolerant station search kicks in only after the exact query finds
+# nothing; 0.6 tolerates a transposition or a missing vowel (mumbay -> Mumbai).
+FUZZY_STATION_THRESHOLD = 0.6
