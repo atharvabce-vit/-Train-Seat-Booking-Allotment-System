@@ -1,4 +1,4 @@
-from models.util import now_utc, now_str
+from models.util import now_str, today_ist
 
 
 def summary(conn):
@@ -87,8 +87,10 @@ def top_routes(conn, limit=5):
 
 
 def occupancy(conn, train_id, class_code, from_seq, to_seq, quota="GN"):
+    from config import QUOTA_POOL
     from models.trains import quota_seat_count
 
+    pool = QUOTA_POOL.get(quota, "GN")
     total = quota_seat_count(conn, train_id, class_code, quota)
     occupied = conn.execute(
         """
@@ -99,8 +101,10 @@ def occupancy(conn, train_id, class_code, from_seq, to_seq, quota="GN"):
         WHERE c.train_id = ? AND c.class_code = ?
           AND si.from_seq < ? AND ? < si.to_seq
           AND si.status = 'booked'
+          AND ((? = 'TQ' AND s.seat_number <= c.tatkal_seats)
+               OR (? = 'GN' AND s.seat_number > c.tatkal_seats))
         """,
-        (train_id, class_code, to_seq, from_seq),
+        (train_id, class_code, to_seq, from_seq, pool, pool),
     ).fetchone()["c"]
     percent = round(occupied / total * 100, 1) if total else 0.0
     return {"total": total, "occupied": occupied, "percent": percent}
@@ -206,4 +210,4 @@ def class_occupancy(conn, travel_date):
 
 
 def today():
-    return now_utc().date().isoformat()
+    return today_ist().isoformat()
