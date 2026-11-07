@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS seat_holds (
     travel_date TEXT    NOT NULL,
     from_seq    INTEGER NOT NULL,
     to_seq      INTEGER NOT NULL,
-    quota       TEXT    NOT NULL CHECK (quota IN ('GN', 'TQ')),
+    quota       TEXT    NOT NULL CHECK (quota IN ('GN', 'TQ', 'PT', 'LD', 'SS', 'DF', 'DP')),
     expires_at  TEXT    NOT NULL,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     CHECK (to_seq > from_seq)
@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     travel_date    TEXT    NOT NULL,
     from_seq       INTEGER NOT NULL,
     to_seq         INTEGER NOT NULL,
-    quota          TEXT    NOT NULL DEFAULT 'GN' CHECK (quota IN ('GN', 'TQ')),
+    quota          TEXT    NOT NULL DEFAULT 'GN'
+                   CHECK (quota IN ('GN', 'TQ', 'PT', 'LD', 'SS', 'DF', 'DP')),
     status         TEXT    NOT NULL DEFAULT 'confirmed'
                    CHECK (status IN ('confirmed', 'rac', 'waiting', 'cancelled')),
     queue_position INTEGER,
