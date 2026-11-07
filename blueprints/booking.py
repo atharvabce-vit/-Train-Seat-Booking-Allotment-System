@@ -23,6 +23,7 @@ from config import (
     QUOTA_NAMES,
 )
 from models import trains as trains_model
+from models import intelligence
 from models.booking import (
     BookingError,
     NoSeatsError,
@@ -128,6 +129,9 @@ def book():
         for class_code in trains_model.classes_for_train(conn, train_id):
             if class_code == "1A" and selected_class != "1A":
                 pass
+            index = intelligence.demand_index(
+                conn, train_id, class_code, travel_date, from_seq, to_seq, quota
+            )
             classes.append(
                 {
                     "code": class_code,
@@ -137,6 +141,7 @@ def book():
                         conn, train_id, class_code, travel_date, from_seq, to_seq, quota
                     ),
                     "fare": fare_per_passenger(class_code, distance, quota),
+                    "demand_label": intelligence.demand_label(index),
                 }
             )
 
@@ -213,12 +218,16 @@ def create_booking_hold():
         quota=quota,
     )
 
-    if not (train_id and class_code and user_name and user_email and passengers):
+    logged_in_user = session.get("user_id")
+    if not (train_id and class_code and passengers):
+        flash("Please fill in your details and at least one passenger.")
+        return redirect(back)
+    if not logged_in_user and not (user_name and user_email):
         flash("Please fill in your details and at least one passenger.")
         return redirect(back)
 
     with db() as conn:
-        user_id = get_or_create_user(conn, user_name, user_email, user_phone)
+        user_id = logged_in_user or get_or_create_user(conn, user_name, user_email, user_phone)
         try:
             hold = create_hold(
                 conn, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers
@@ -297,15 +306,19 @@ def confirm_payment(token):
         return redirect(url_for("main.index"))
 
     method = request.form.get("payment_method", DEFAULT_PAYMENT_METHOD)
+    card_number = request.form.get("card_number", "").strip()
     passengers = session.get("hold_passengers", [])
     user_id = session.get("hold_user")
 
     with db() as conn:
         try:
-            pnr = confirm_booking(conn, user_id, token, passengers, method)
+            pnr = confirm_booking(
+                conn, user_id, token, passengers, method,
+                idempotency_key=f"hold:{token}", card_number=card_number,
+            )
         except BookingError as error:
             flash(str(error))
-            return redirect(url_for("main.index"))
+            return redirect(url_for("booking.confirm", token=token))
 
     session.pop("hold_token", None)
     session.pop("hold_passengers", None)
@@ -449,11 +462,17 @@ def verify(pnr):
 def my_bookings():
     email = request.args.get("email", "").strip()
     bookings = None
-    if email:
-        with db() as conn:
+    with db() as conn:
+        if session.get("user_id"):
+            user = conn.execute(
+                "SELECT email FROM users WHERE id = ?", (session["user_id"],)
+            ).fetchone()
+            if user is not None:
+                email = user["email"]
+        if email:
             bookings = bookings_for_email(conn, email)
-        if not bookings:
-            flash("No bookings found for this e-mail.")
+    if email and not bookings:
+        flash("No bookings found for this e-mail.")
     return render_template(
         "my_bookings.html", email=email, bookings=bookings, class_names=CLASS_NAMES
     )
@@ -577,7 +596,11 @@ def create_round_trip():
         date=form.get("outbound_date", ""),
         return_date=form.get("return_date", ""),
     )
-    if not (user_name and user_email and passengers):
+    logged_in_user = session.get("user_id")
+    if not passengers:
+        flash("Please fill in your details and at least one passenger.")
+        return redirect(back)
+    if not logged_in_user and not (user_name and user_email):
         flash("Please fill in your details and at least one passenger.")
         return redirect(back)
 
@@ -591,7 +614,7 @@ def create_round_trip():
             return redirect(back)
 
     with db() as conn:
-        user_id = get_or_create_user(conn, user_name, user_email, user_phone)
+        user_id = logged_in_user or get_or_create_user(conn, user_name, user_email, user_phone)
         try:
             result = book_round_trip(conn, user_id, outbound, inbound)
         except BookingError as error:
