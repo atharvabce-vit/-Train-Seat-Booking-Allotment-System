@@ -247,10 +247,6 @@ CREATE INDEX IF NOT EXISTS idx_passengers_book    ON passengers(booking_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_book ON notifications(booking_id);
 CREATE INDEX IF NOT EXISTS idx_changes_booking    ON booking_changes(booking_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created      ON audit_log(created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_idem ON bookings(idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_idem ON payments(idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
 """
 
 
