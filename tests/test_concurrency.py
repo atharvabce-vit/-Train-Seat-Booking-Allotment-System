@@ -1,7 +1,7 @@
 import os
 import sys
 import threading
-from datetime import date
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -11,7 +11,7 @@ from models.pnr import get_booking_by_pnr
 from models.trains import available_count
 from seed import create_train
 
-TRAVEL_DATE = date.today().isoformat()
+TRAVEL_DATE = (date.today() + timedelta(days=1)).isoformat()
 PLAN = {"SL": (1, 10)}
 TOTAL_SEATS = 10
 PASSENGERS_PER_THREAD = 2
