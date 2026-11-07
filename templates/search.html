@@ -2,25 +2,36 @@
 {% block title %}Search Trains{% endblock %}
 
 {% block content %}
-<h1>Search Trains</h1>
+<section class="hero{% if trains is not none %} hero-compact{% endif %} card">
+    {% if trains is none %}
+        <p class="eyebrow">India train booking &middot; live availability</p>
+        <h1>Where are you travelling?</h1>
+        <p class="hero-sub">
+            Search direct trains and smart one-change connections, compare fares across
+            classes, and lock in your seat before the chart is prepared.
+        </p>
+    {% else %}
+        <h1>Search Trains</h1>
+    {% endif %}
 
-<form class="card search-form" method="get" action="{{ url_for('main.search') }}">
-    <div class="field">
-        <label for="source">From</label>
-        <input type="text" id="source" name="source" value="{{ source }}"
-               placeholder="City or station" autocomplete="off" data-stations required>
-    </div>
-    <div class="field">
-        <label for="destination">To</label>
-        <input type="text" id="destination" name="destination" value="{{ destination }}"
-               placeholder="City or station" autocomplete="off" data-stations required>
-    </div>
-    <div class="field">
-        <label for="date">Travel Date</label>
-        <input type="date" id="date" name="date" value="{{ travel_date }}" data-travel-date>
-    </div>
-    <button type="submit">Search</button>
-</form>
+    <form class="search-form" method="get" action="{{ url_for('main.search') }}">
+        <div class="field">
+            <label for="source">From</label>
+            <input type="text" id="source" name="source" value="{{ source }}"
+                   placeholder="City or station" autocomplete="off" data-stations required>
+        </div>
+        <div class="field">
+            <label for="destination">To</label>
+            <input type="text" id="destination" name="destination" value="{{ destination }}"
+                   placeholder="City or station" autocomplete="off" data-stations required>
+        </div>
+        <div class="field">
+            <label for="date">Travel Date</label>
+            <input type="date" id="date" name="date" value="{{ travel_date }}" data-travel-date>
+        </div>
+        <button type="submit">Search</button>
+    </form>
+</section>
 
 {% if source and destination %}
     <p><a class="button ghost" href="{{ url_for('booking.round_trip', source=source, destination=destination, date=travel_date) }}">Book a round trip instead</a></p>
