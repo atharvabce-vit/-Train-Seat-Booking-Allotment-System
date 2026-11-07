@@ -12,6 +12,7 @@ from models.booking import (
     book_seats,
     cancel_booking,
     cancel_passengers,
+    confirmation_probability,
     join_queue,
     reschedule_booking,
 )
@@ -28,6 +29,21 @@ def _payload():
 
 def _token():
     return request.headers.get("X-API-Token") or request.args.get("token", "")
+
+
+def _paginate(items, key):
+    """Slice a list payload using page/per_page query params and add metadata."""
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    per_page = min(100, max(1, request.args.get("per_page", 20, type=int) or 20))
+    total = len(items)
+    start = (page - 1) * per_page
+    return {
+        key: items[start:start + per_page],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": (total + per_page - 1) // per_page,
+    }
 
 
 def _require_token():
@@ -62,9 +78,9 @@ def stations():
 
     def load():
         with db() as conn:
-            return [dict(row) for row in trains_model.search_stations(conn, query, limit=20)]
+            return [dict(row) for row in trains_model.search_stations(conn, query, limit=100)]
 
-    return jsonify({"stations": cache.remember(f"stations:{query}", load, ttl_seconds=60)})
+    return jsonify(_paginate(cache.remember(f"stations:{query}", load, ttl_seconds=60), "stations"))
 
 
 @api_bp.route("/trains")
@@ -73,7 +89,7 @@ def trains():
         rows = conn.execute(
             "SELECT id, train_number, train_name, runs_on FROM trains ORDER BY train_number"
         ).fetchall()
-    return jsonify({"trains": [dict(row) for row in rows]})
+    return jsonify(_paginate([dict(row) for row in rows], "trains"))
 
 
 @api_bp.route("/search")
@@ -90,7 +106,7 @@ def search():
     results = cache.remember(
         f"search:{source.lower()}:{destination.lower()}", load, ttl_seconds=30
     )
-    return jsonify({"count": len(results), "results": results})
+    return jsonify(_paginate(results, "results"))
 
 
 def _leg_args():
@@ -128,7 +144,7 @@ def availability():
                 conn, train_id, class_code, travel_date, from_seq, to_seq, quota
             ),
             "fare_per_passenger": fare_per_passenger(class_code, distance, quota),
-            "tatkal_open": trains_model.tatkal_open(conn, train_id, travel_date, from_seq),
+            "tatkal_open": trains_model.tatkal_open(conn, train_id, travel_date, from_seq, class_code),
         }
     return jsonify(payload)
 
@@ -195,6 +211,8 @@ def book():
             )
             status = "confirmed"
         except NoSeatsError:
+            if data.get("only_confirmed"):
+                return jsonify({"error": "No confirmed seats are free."}), 409
             pnr, status, position = join_queue(
                 conn, user_id, data["train_id"], data["class"], data["date"],
                 data["from_seq"], data["to_seq"], data.get("quota", "GN").upper(), passengers,
@@ -252,6 +270,7 @@ def pnr(pnr):
         record = get_booking_by_pnr(conn, pnr)
     if record is None:
         return jsonify({"error": "PNR not found."}), 404
+    record["confirmation_probability"] = confirmation_probability(record["booking"])
     return jsonify(record)
 
 
