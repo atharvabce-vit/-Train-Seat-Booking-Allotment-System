@@ -58,6 +58,30 @@ def test_search_returns_route(client):
     assert trip["distance_km"] > 0
 
 
+def test_journeys_endpoint_returns_connection(client):
+    # No direct Kolkata -> Chennai train exists, so this must be a connection.
+    assert client.get("/api/search?from=Kolkata&to=Chennai").get_json()["total"] == 0
+
+    response = client.get("/api/journeys?from=Kolkata&to=Chennai")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["total"] >= 1
+    journey = payload["journeys"][0]
+    assert journey["changes"] == 1
+    assert len(journey["legs"]) == 2
+    assert journey["fares"]
+
+
+def test_journeys_requires_both_cities(client):
+    assert client.get("/api/journeys?from=Kolkata").status_code == 400
+
+
+def test_search_page_shows_connecting_journeys(client):
+    response = client.get("/search?source=Kolkata&destination=Chennai")
+    assert response.status_code == 200
+    assert b"Connecting journeys" in response.data
+
+
 def test_availability_endpoint(client):
     trip = find_trip(client)
     response = client.get(
