@@ -51,6 +51,7 @@
 </div>
 
 <form method="post" action="{{ url_for('booking.confirm_payment', token=token) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card">
         <div class="field">
             <label for="payment_method">Payment method (mock gateway)</label>
