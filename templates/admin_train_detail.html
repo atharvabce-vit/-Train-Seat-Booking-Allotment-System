@@ -8,6 +8,7 @@
 <div class="card">
     <h2>Train details</h2>
     <form method="post" action="{{ url_for('admin.edit_train', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="key" value="{{ key }}">
         <div class="field">
             <label for="train_name">Name</label>
@@ -46,6 +47,7 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('admin.add_stop', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="key" value="{{ key }}">
         <div class="field">
             <label for="station_code">Station</label>
@@ -95,7 +97,9 @@
                         <td>{{ coach.tatkal_seats }}</td>
                         <td>
                             <form method="post" action="{{ url_for('admin.delete_coach', coach_id=coach.id) }}" class="inline">
-                                <input type="hidden" name="key" value="{{ key }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="key" value="{{ key }}">
                                 <button class="button ghost danger" type="submit">Remove</button>
                             </form>
                         </td>
@@ -108,6 +112,7 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('admin.add_coach', train_id=train.id) }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="key" value="{{ key }}">
         <div class="field">
             <label for="class_code">Class</label>
