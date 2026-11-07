@@ -21,7 +21,7 @@ from models.trains import available_count
 from models.util import STAMP_FORMAT, now_utc
 from seed import create_train
 
-TRAVEL_DATE = date.today().isoformat()
+TRAVEL_DATE = (date.today() + timedelta(days=1)).isoformat()
 
 
 @pytest.fixture
