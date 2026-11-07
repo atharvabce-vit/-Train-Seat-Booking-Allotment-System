@@ -13,17 +13,19 @@ from config import (
     ROUND_TRIP_DISCOUNT_PCT,
     SENIOR_AGE,
 )
-from models import audit, notifications
+from models import audit, notifications, payments
 from models.fare import (
     calculate_fare_with_concessions,
     refund_amount,
 )
+from models.intelligence import waitlist_confidence
 from models.pnr import generate_pnr
 from models.trains import (
     available_seats,
     get_train,
     hours_before_departure,
     is_bookable_date,
+    is_chart_prepared,
     quota_seat_count,
     runs_on_date,
     segment_distance,
@@ -173,6 +175,8 @@ def validate_party(conn, train_id, class_code, travel_date, from_seq, to_seq, qu
         raise BookingError("This train does not run on the selected date.")
     if hours_before_departure(conn, train_id, travel_date, from_seq) <= 0:
         raise BookingError("This train has already departed from the boarding station.")
+    if is_chart_prepared(conn, train_id, travel_date):
+        raise BookingError("Online booking is closed: this train's chart has been prepared.")
 
     if quota_seat_count(conn, train_id, class_code, quota) == 0:
         raise BookingError("This class is not available on the selected train.")
@@ -241,7 +245,8 @@ def hold_seats(conn, token):
     return [dict(row) for row in rows]
 
 
-def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_METHOD, discount_pct=0):
+def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_METHOD, discount_pct=0,
+                    idempotency_key=None, card_number=None):
     passengers = _normalise_passengers(passengers)
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -278,13 +283,13 @@ def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_MET
             """
             INSERT INTO bookings
                 (pnr, user_id, train_id, class_code, travel_date, from_seq, to_seq,
-                 quota, status, distance_km, total_fare, concession_amount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)
+                 quota, status, distance_km, total_fare, concession_amount, idempotency_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?)
             """,
             (
                 pnr, user_id, train_id, class_code, hold["travel_date"],
                 hold["from_seq"], hold["to_seq"], quota, distance, total_fare,
-                concession_amount,
+                concession_amount, idempotency_key,
             ),
         )
         booking_id = cursor.lastrowid
@@ -310,13 +315,14 @@ def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_MET
                 (booking_id, token, seat["seat_id"]),
             )
 
-        conn.execute(
-            """
-            INSERT INTO payments (booking_id, amount, method, status, txn_ref)
-            VALUES (?, ?, ?, 'success', ?)
-            """,
-            (booking_id, total_fare, method, f"TXN{secrets.token_hex(6).upper()}"),
-        )
+        try:
+            payments.charge(
+                conn, booking_id, total_fare, method,
+                card_number=card_number,
+                idempotency_key=idempotency_key or f"booking:{pnr}",
+            )
+        except payments.PaymentError as error:
+            raise BookingError(str(error))
 
         contact = conn.execute("SELECT name, email, phone FROM users WHERE id = ?", (user_id,)).fetchone()
         notifications.queue_email(
@@ -341,9 +347,16 @@ def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_MET
 
 
 def book_seats(conn, user_id, train_id, class_code, travel_date, from_seq, to_seq, passengers,
-               quota="GN", discount_pct=0):
+               quota="GN", discount_pct=0, idempotency_key=None):
+    if idempotency_key:
+        existing = conn.execute(
+            "SELECT pnr FROM bookings WHERE idempotency_key = ?", (idempotency_key,)
+        ).fetchone()
+        if existing is not None:
+            return existing["pnr"]
     hold = create_hold(conn, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers)
-    return confirm_booking(conn, user_id, hold["token"], passengers, discount_pct=discount_pct)
+    return confirm_booking(conn, user_id, hold["token"], passengers,
+                           discount_pct=discount_pct, idempotency_key=idempotency_key)
 
 
 
@@ -423,21 +436,12 @@ def join_queue(conn, user_id, train_id, class_code, travel_date, from_seq, to_se
 
 
 def confirmation_probability(booking):
-    """A rough 0-100 chance that an RAC/waitlisted booking ends up confirmed.
+    """A 0-100 chance that an RAC/waitlisted booking ends up confirmed.
 
-    RAC tickets almost always get a berth and only taper as the RAC position
-    grows; waitlisted tickets depend far more on other passengers cancelling,
-    so their odds fall away much faster with the queue position.
+    Delegates to the demand model in ``models.intelligence``; see
+    :func:`models.intelligence.waitlist_confidence` for the reasoning.
     """
-    status = booking["status"]
-    if status == "confirmed":
-        return 100
-    if status == "cancelled":
-        return 0
-    position = booking["queue_position"] or 1
-    if status == "rac":
-        return max(50, 95 - (position - 1) * 3)
-    return max(1, 70 - position * 4)
+    return waitlist_confidence(booking)
 
 
 def _booking_passengers(conn, booking_id):
