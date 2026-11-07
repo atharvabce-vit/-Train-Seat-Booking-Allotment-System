@@ -16,7 +16,7 @@ from flask import (
 
 from blueprints import db
 from config import ADMIN_KEY, DB_PATH
-from models import audit, notifications, reports
+from models import audit, cache, notifications, reports
 from models import trains as trains_model
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -131,6 +131,7 @@ def create_train():
         except Exception as error:
             flash(f"Could not create train: {error}")
             return redirect(url_for("admin.trains", key=ADMIN_KEY))
+    cache.clear()
     flash(f"Train {number} added. Now add its halts and coaches.")
     return redirect(url_for("admin.train_detail", train_id=cursor.lastrowid, key=ADMIN_KEY))
 
@@ -186,6 +187,7 @@ def edit_train(train_id):
             )
             audit.log(conn, "train_update", "train", train_id, name)
             flash("Train updated.")
+    cache.clear()
     return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
 
 
@@ -214,6 +216,7 @@ def add_coach(train_id):
             flash(f"Could not add coach: {error}")
             return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
         audit.log(conn, "coach_create", "train", train_id, f"{coach_name} {class_code} {seat_count}")
+    cache.clear()
     flash(f"Coach {coach_name} added with {seat_count} seats.")
     return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
 
@@ -231,6 +234,7 @@ def delete_coach(coach_id):
             abort(404)
         conn.execute("DELETE FROM coaches WHERE id = ?", (coach_id,))
         audit.log(conn, "coach_delete", "train", coach["train_id"], coach["coach_name"])
+    cache.clear()
     flash("Coach removed.")
     return redirect(url_for("admin.train_detail", train_id=coach["train_id"], key=ADMIN_KEY))
 
@@ -264,6 +268,7 @@ def add_stop(train_id):
         except Exception as error:
             flash(f"Could not add halt: {error}")
             return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
+    cache.clear()
     flash("Halt added.")
     return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
 
