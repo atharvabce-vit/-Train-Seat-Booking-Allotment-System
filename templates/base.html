@@ -16,6 +16,16 @@
             <a href="{{ url_for('booking.my_bookings') }}">My Bookings</a>
             <a href="{{ url_for('api.docs') }}">API</a>
             <a href="{{ url_for('admin.dashboard') }}">Admin</a>
+            {% if current_user %}
+                <span class="muted">{{ current_user.name }}</span>
+                <form class="inline-form" method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="button ghost">Sign out</button>
+                </form>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}">Sign in</a>
+                <a href="{{ url_for('auth.register') }}">Register</a>
+            {% endif %}
         </nav>
     </header>
 
