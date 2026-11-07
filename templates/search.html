@@ -59,7 +59,47 @@
             </div>
         {% endfor %}
     {% else %}
-        <p class="muted">No trains found for this route. Try "Mumbai" &rarr; "Delhi".</p>
+        <p class="muted">No direct trains found for this route.</p>
+        {% if journeys %}
+            <h2>Connecting journeys <span class="muted">(1 change)</span></h2>
+            {% for journey in journeys %}
+                <div class="card journey-card">
+                    <div class="train-info">
+                        <h3>Via {{ journey.transfer_at }} &mdash; {{ journey.total_duration }}</h3>
+                        {% for leg in journey.legs %}
+                            <p>
+                                <strong>{{ leg.train_number }} {{ leg.train_name }}</strong><br>
+                                {{ leg.from_name }} ({{ leg.depart_label }}) &rarr;
+                                {{ leg.to_name }} ({{ leg.arrive_label }})
+                                <span class="muted">&middot; {{ leg.distance_km }} km &middot; {{ leg.duration }}</span>
+                            </p>
+                        {% endfor %}
+                        <p class="muted">
+                            Change at {{ journey.transfer_at }} &middot; layover {{ journey.transfer_wait }}
+                        </p>
+                        <p class="muted">
+                            {{ journey.total_distance_km }} km total &middot;
+                            {% for code, amount in journey.fares.items() %}
+                                {{ code }} &#8377;{{ '%.0f'|format(amount) }}{% if not loop.last %} &middot; {% endif %}
+                            {% endfor %}
+                        </p>
+                    </div>
+                    <div class="train-actions">
+                        {% for leg in journey.legs %}
+                            <form class="inline-form" method="get" action="{{ url_for('booking.book') }}">
+                                <input type="hidden" name="train_id" value="{{ leg.train_id }}">
+                                <input type="hidden" name="from_seq" value="{{ leg.from_seq }}">
+                                <input type="hidden" name="to_seq" value="{{ leg.to_seq }}">
+                                <input type="hidden" name="date" value="{{ travel_date }}">
+                                <button type="submit">Book leg {{ loop.index }}</button>
+                            </form>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="muted">No direct or connecting trains found. Try "Mumbai" &rarr; "Delhi".</p>
+        {% endif %}
     {% endif %}
 {% else %}
     <div class="card muted">
