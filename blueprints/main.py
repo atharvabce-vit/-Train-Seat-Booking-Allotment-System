@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, render_template, request
 
 from blueprints import db
+from models import itinerary as itinerary_model
 from models import trains as trains_model
 
 main_bp = Blueprint("main", __name__)
@@ -20,13 +21,17 @@ def search():
     travel_date = request.args.get("date", "").strip()
 
     results = None
+    journeys = []
     if source and destination:
         with db() as conn:
             results = [dict(row) for row in trains_model.search_trains(conn, source, destination)]
+            if not results:
+                journeys = itinerary_model.find_journeys(conn, source, destination, limit=6)
 
     return render_template(
         "search.html",
         trains=results,
+        journeys=journeys,
         source=source,
         destination=destination,
         travel_date=travel_date,
