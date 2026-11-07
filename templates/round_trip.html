@@ -32,6 +32,7 @@
 
 {% if outbound is not none %}
     <form method="post" action="{{ url_for('booking.create_round_trip') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="source" value="{{ source }}">
         <input type="hidden" name="destination" value="{{ destination }}">
         <input type="hidden" name="outbound_date" value="{{ depart_date }}">
