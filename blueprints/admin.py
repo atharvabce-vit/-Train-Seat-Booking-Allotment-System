@@ -16,8 +16,9 @@ from flask import (
 
 from blueprints import db
 from config import ADMIN_KEY, DB_PATH
-from models import audit, cache, notifications, reports
+from models import audit, cache, chart as chart_model, notifications, reports
 from models import trains as trains_model
+from models.booking import BookingError
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -271,6 +272,37 @@ def add_stop(train_id):
     cache.clear()
     flash("Halt added.")
     return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
+
+
+@admin_bp.route("/chart/prepare", methods=["POST"])
+def prepare_chart():
+    if not _authorised():
+        flash("Admin key required.")
+        return redirect(url_for("main.index"))
+    train_id = request.form.get("train_id", type=int)
+    travel_date = request.form.get("travel_date", "").strip() or reports.today()
+    if not train_id:
+        flash("Choose a train to prepare a chart for.")
+        return redirect(url_for("admin.trains", key=ADMIN_KEY))
+    with db() as conn:
+        try:
+            promoted = chart_model.prepare_chart(conn, train_id, travel_date)
+        except BookingError as error:
+            flash(str(error))
+            return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
+    flash(f"Chart prepared for {travel_date}. {len(promoted)} queued booking(s) confirmed.")
+    return redirect(url_for("admin.train_detail", train_id=train_id, key=ADMIN_KEY))
+
+
+@admin_bp.route("/chart/prepare-due", methods=["POST"])
+def prepare_due_charts():
+    if not _authorised():
+        flash("Admin key required.")
+        return redirect(url_for("main.index"))
+    with db() as conn:
+        prepared = chart_model.prepare_due_charts(conn)
+    flash(f"Prepared {len(prepared)} chart(s) that had reached their cut-off.")
+    return redirect(url_for("admin.dashboard", key=ADMIN_KEY))
 
 
 @admin_bp.route("/export/bookings.csv")
