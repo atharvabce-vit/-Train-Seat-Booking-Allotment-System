@@ -12,7 +12,7 @@ from models.pnr import get_booking_by_pnr
 from models.trains import available_count, available_seats, quota_seat_count
 from seed import create_train
 
-TRAVEL_DATE = date.today().isoformat()
+TRAVEL_DATE = (date.today() + timedelta(days=1)).isoformat()
 PLAN_ONE_COACH = {"SL": (1, 10)}
 PLAN_TWO_COACHES = {"SL": (2, 6)}
 
@@ -154,7 +154,7 @@ def test_max_six_passengers_per_pnr(db):
 def test_booking_window_is_enforced(db):
     train_id = make_train(db, "90007")
     user_id = make_user(db)
-    far_date = (date.today() + timedelta(days=60)).isoformat()
+    far_date = (date.today() + timedelta(days=61)).isoformat()
 
     with pytest.raises(BookingError):
         book_seats(db, user_id, train_id, "SL", far_date, 1, 2, passengers(1))
