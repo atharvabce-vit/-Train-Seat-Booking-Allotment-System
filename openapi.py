@@ -4,7 +4,7 @@ SPEC = {
     "openapi": "3.0.3",
     "info": {
         "title": "RailYatra Booking API",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "description": (
             "Train seat booking and allotment. Read endpoints are open; "
             "write endpoints require the X-API-Token header."
@@ -38,7 +38,17 @@ SPEC = {
                     "date": {"type": "string", "format": "date"},
                     "from_seq": {"type": "integer"},
                     "to_seq": {"type": "integer"},
-                    "quota": {"type": "string", "enum": ["GN", "TQ"]},
+                    "quota": {
+                        "type": "string",
+                        "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"],
+                        "default": "GN",
+                        "description": "General, Tatkal, Premium Tatkal, Ladies, Senior, Defence or Duty Pass.",
+                    },
+                    "only_confirmed": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Reject the booking (HTTP 409) when no confirmed seat is free.",
+                    },
                     "user": {
                         "type": "object",
                         "properties": {
@@ -61,6 +71,29 @@ SPEC = {
                     "queue_position": {"type": "integer", "nullable": True},
                 },
             },
+            "PnrResponse": {
+                "type": "object",
+                "properties": {
+                    "booking": {"type": "object"},
+                    "passengers": {"type": "array", "items": {"type": "object"}},
+                    "refunds": {"type": "array", "items": {"type": "object"}},
+                    "confirmation_probability": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Estimated chance of the RAC/waitlist ticket confirming.",
+                    },
+                },
+            },
+            "PageMeta": {
+                "type": "object",
+                "properties": {
+                    "page": {"type": "integer"},
+                    "per_page": {"type": "integer"},
+                    "total": {"type": "integer"},
+                    "pages": {"type": "integer"},
+                },
+            },
         },
     },
     "paths": {
@@ -68,15 +101,21 @@ SPEC = {
             "get": {
                 "summary": "Station autocomplete",
                 "parameters": [
-                    {"name": "q", "in": "query", "schema": {"type": "string"}}
+                    {"name": "q", "in": "query", "schema": {"type": "string"}},
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+                    {"name": "per_page", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
                 ],
-                "responses": {"200": {"description": "Matching stations"}},
+                "responses": {"200": {"description": "Matching stations (paginated)"}},
             }
         },
         "/api/trains": {
             "get": {
                 "summary": "List trains",
-                "responses": {"200": {"description": "All trains"}},
+                "parameters": [
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+                    {"name": "per_page", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+                ],
+                "responses": {"200": {"description": "All trains (paginated)"}},
             }
         },
         "/api/search": {
@@ -85,9 +124,11 @@ SPEC = {
                 "parameters": [
                     {"name": "from", "in": "query", "required": True, "schema": {"type": "string"}},
                     {"name": "to", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+                    {"name": "per_page", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
                 ],
                 "responses": {
-                    "200": {"description": "Matching journeys"},
+                    "200": {"description": "Matching journeys (paginated)"},
                     "400": {"description": "Missing query parameters"},
                 },
             }
@@ -101,7 +142,7 @@ SPEC = {
                     {"name": "date", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
                     {"name": "from_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
                     {"name": "to_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
-                    {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ"]}},
+                    {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"], "default": "GN"}},
                 ],
                 "responses": {"200": {"description": "Availability payload"}},
             }
@@ -109,6 +150,14 @@ SPEC = {
         "/api/seatmap": {
             "get": {
                 "summary": "Seat-level map for a coach/class",
+                "parameters": [
+                    {"name": "train_id", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "cls", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "date", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+                    {"name": "from_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "to_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"], "default": "GN"}},
+                ],
                 "responses": {"200": {"description": "Seats and their status"}},
             }
         },
@@ -135,6 +184,7 @@ SPEC = {
                     },
                     "400": {"description": "Validation error"},
                     "401": {"description": "Missing or invalid token"},
+                    "409": {"description": "No confirmed seats and only_confirmed was requested"},
                     "429": {"description": "Rate limit exceeded"},
                 },
             }
@@ -153,19 +203,72 @@ SPEC = {
                     {"name": "pnr", "in": "path", "required": True, "schema": {"type": "string"}}
                 ],
                 "responses": {
-                    "200": {"description": "Booking record"},
+                    "200": {
+                        "description": "Booking record with confirmation probability",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/PnrResponse"}
+                            }
+                        },
+                    },
                     "404": {"description": "Unknown PNR"},
                 },
             }
         },
         "/api/cancel/{pnr}": {
             "post": {
-                "summary": "Cancel a booking",
+                "summary": "Cancel a booking (whole PNR or selected passengers)",
                 "security": [{"ApiToken": []}],
                 "parameters": [
                     {"name": "pnr", "in": "path", "required": True, "schema": {"type": "string"}}
                 ],
+                "requestBody": {
+                    "required": False,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "passenger_ids": {
+                                        "type": "array",
+                                        "items": {"type": "integer"},
+                                        "description": "Omit to cancel the entire PNR.",
+                                    }
+                                },
+                            }
+                        }
+                    },
+                },
                 "responses": {"200": {"description": "Cancelled with refund"}},
+            }
+        },
+        "/api/reschedule/{pnr}": {
+            "post": {
+                "summary": "Move a booking to another date (and optionally another leg)",
+                "security": [{"ApiToken": []}],
+                "parameters": [
+                    {"name": "pnr", "in": "path", "required": True, "schema": {"type": "string"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["date"],
+                                "properties": {
+                                    "date": {"type": "string", "format": "date"},
+                                    "from_seq": {"type": "integer"},
+                                    "to_seq": {"type": "integer"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {"description": "Rescheduled with change fee"},
+                    "400": {"description": "Validation error"},
+                },
             }
         },
     },
