@@ -3,12 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b2447">
     <title>{% block title %}RailYatra - Train Booking{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <header class="site-header">
-        <a class="brand" href="{{ url_for('main.index') }}">RailYatra</a>
+        <a class="brand" href="{{ url_for('main.index') }}">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2C7.6 2 4 2.9 4 6.5V15a3 3 0 0 0 2.2 2.9L5 20v1h2.5l1.2-2h6.6l1.2 2H19v-1l-1.2-2.1A3 3 0 0 0 20 15V6.5C20 2.9 16.4 2 12 2Zm-5.5 5h11v4h-11V7Zm1.5 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/></svg>
+            </span>
+            RailYatra
+        </a>
         <nav>
             <a href="{{ url_for('main.index') }}">Search</a>
             <a href="{{ url_for('booking.round_trip') }}">Round Trip</a>
