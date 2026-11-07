@@ -61,6 +61,11 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="field">
+            <label for="card_number">Card number (sandbox &mdash; optional; a number ending in 0000 is declined)</label>
+            <input type="text" id="card_number" name="card_number" inputmode="numeric"
+                   autocomplete="cc-number" placeholder="4111 1111 1111 1111">
+        </div>
         <div class="fare-summary">
             <span>
                 Total payable
