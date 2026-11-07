@@ -19,7 +19,7 @@ from models.pnr import get_booking_by_pnr
 from models.trains import available_count
 from seed import create_train
 
-TRAVEL_DATE = date.today().isoformat()
+TRAVEL_DATE = (date.today() + timedelta(days=1)).isoformat()
 LATER_DATE = (date.today() + timedelta(days=5)).isoformat()
 
 
