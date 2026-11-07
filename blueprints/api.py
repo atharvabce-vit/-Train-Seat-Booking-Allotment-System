@@ -1,9 +1,14 @@
-from flask import Blueprint, jsonify, render_template, request
+import json
+import time
+
+from flask import Blueprint, Response, jsonify, render_template, request
 
 from blueprints import db
 from blueprints.booking import get_or_create_user
 from config import CLASS_NAMES
-from models import cache, trains as trains_model
+from models import cache, chart as chart_model, trains as trains_model
+from models import intelligence
+from models import itinerary as itinerary_model
 from models.api_auth import rate_limited, validate_token
 from models.booking import (
     BookingError,
@@ -109,6 +114,18 @@ def search():
     return jsonify(_paginate(results, "results"))
 
 
+@api_bp.route("/journeys")
+def journeys():
+    source = request.args.get("from", "").strip()
+    destination = request.args.get("to", "").strip()
+    if not source or not destination:
+        return jsonify({"error": "Query parameters 'from' and 'to' are required."}), 400
+    limit = min(20, max(1, request.args.get("limit", 10, type=int) or 10))
+    with db() as conn:
+        results = itinerary_model.find_journeys(conn, source, destination, limit=limit)
+    return jsonify(_paginate(results, "journeys"))
+
+
 def _leg_args():
     train_id = request.args.get("train_id", type=int)
     class_code = (request.args.get("cls") or request.args.get("class") or "").strip()
@@ -146,7 +163,74 @@ def availability():
             "fare_per_passenger": fare_per_passenger(class_code, distance, quota),
             "tatkal_open": trains_model.tatkal_open(conn, train_id, travel_date, from_seq, class_code),
         }
+        index = intelligence.demand_index(
+            conn, train_id, class_code, travel_date, from_seq, to_seq, quota
+        )
+        payload["demand_index"] = index
+        payload["demand_label"] = intelligence.demand_label(index)
+        payload["surge_multiplier"] = intelligence.surge_multiplier(index)
     return jsonify(payload)
+
+
+@api_bp.route("/demand")
+def demand():
+    """Occupancy, a demand label and the surge price for a leg."""
+    train_id, class_code, travel_date, from_seq, to_seq, quota = _leg_args()
+    if not (train_id and class_code and travel_date and from_seq and to_seq):
+        return jsonify({"error": "train_id, cls, date, from_seq and to_seq are required."}), 400
+    with db() as conn:
+        if trains_model.get_train(conn, train_id) is None:
+            return jsonify({"error": "Train not found."}), 404
+        distance = trains_model.segment_distance(conn, train_id, from_seq, to_seq)
+        base = fare_per_passenger(class_code, distance, quota)
+        summary = intelligence.demand_summary(
+            conn, train_id, class_code, travel_date, from_seq, to_seq, quota, base_fare=base
+        )
+    summary.update({
+        "train_id": train_id,
+        "class": class_code,
+        "date": travel_date,
+        "quota": quota,
+        "distance_km": distance,
+    })
+    return jsonify(summary)
+
+
+@api_bp.route("/availability/stream")
+def availability_stream():
+    """Server-Sent Events stream of live availability for one leg.
+
+    Each frame is a JSON availability payload; the client reconnects as it
+    likes. ``frames`` bounds how many updates a single connection pushes (so a
+    test client finishes), and ``interval`` is the seconds between them.
+    """
+    train_id, class_code, travel_date, from_seq, to_seq, quota = _leg_args()
+    if not (train_id and class_code and travel_date and from_seq and to_seq):
+        return jsonify({"error": "train_id, cls, date, from_seq and to_seq are required."}), 400
+    interval = min(30, max(0, request.args.get("interval", 5, type=int) or 0))
+    frames = min(120, max(1, request.args.get("frames", 10, type=int) or 10))
+
+    def generate():
+        for _ in range(frames):
+            with db() as conn:
+                payload = {
+                    "train_id": train_id,
+                    "class": class_code,
+                    "date": travel_date,
+                    "quota": quota,
+                    "available": trains_model.available_count(
+                        conn, train_id, class_code, travel_date, from_seq, to_seq, quota
+                    ),
+                    "tatkal_open": trains_model.tatkal_open(
+                        conn, train_id, travel_date, from_seq, class_code
+                    ),
+                    "server_time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            yield f"data: {json.dumps(payload)}\n\n"
+            if interval:
+                time.sleep(interval)
+
+    return Response(generate(), mimetype="text/event-stream")
 
 
 @api_bp.route("/seatmap")
@@ -193,6 +277,7 @@ def book():
     data = _payload()
     user = data.get("user") or {}
     passengers = data.get("passengers") or []
+    idempotency_key = (request.headers.get("Idempotency-Key") or "").strip() or None
     required = ["train_id", "class", "date", "from_seq", "to_seq"]
     missing = [field for field in required if data.get(field) in (None, "")]
     if missing or not user.get("email") or not passengers:
@@ -208,6 +293,7 @@ def book():
                 data["from_seq"], data["to_seq"], passengers,
                 data.get("quota", "GN").upper(),
                 discount_pct=data.get("discount_pct", 0),
+                idempotency_key=idempotency_key,
             )
             status = "confirmed"
         except NoSeatsError:
@@ -310,3 +396,42 @@ def reschedule(pnr):
         except BookingError as error:
             return jsonify({"error": str(error)}), 400
     return jsonify({"pnr": pnr, **result})
+
+
+@api_bp.route("/chart/status")
+def chart_status():
+    train_id = request.args.get("train_id", type=int)
+    travel_date = request.args.get("date", "").strip()
+    if not (train_id and travel_date):
+        return jsonify({"error": "train_id and date are required."}), 400
+    with db() as conn:
+        prepared = trains_model.is_chart_prepared(conn, train_id, travel_date)
+    return jsonify({"train_id": train_id, "date": travel_date, "prepared": prepared})
+
+
+@api_bp.route("/chart/prepare", methods=["POST"])
+def chart_prepare():
+    denied = _require_token()
+    if denied:
+        return denied
+    data = _payload()
+    train_id = data.get("train_id")
+    travel_date = data.get("date") or data.get("travel_date")
+    if not (train_id and travel_date):
+        return jsonify({"error": "train_id and date are required."}), 400
+    with db() as conn:
+        try:
+            promoted = chart_model.prepare_chart(conn, train_id, travel_date)
+        except BookingError as error:
+            return jsonify({"error": str(error)}), 400
+    return jsonify({"train_id": train_id, "date": travel_date, "promoted": promoted})
+
+
+@api_bp.route("/chart/prepare-due", methods=["POST"])
+def chart_prepare_due():
+    denied = _require_token()
+    if denied:
+        return denied
+    with db() as conn:
+        prepared = chart_model.prepare_due_charts(conn)
+    return jsonify({"prepared": [{"train_id": t, "date": d} for t, d in prepared]})
