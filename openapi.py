@@ -4,7 +4,7 @@ SPEC = {
     "openapi": "3.0.3",
     "info": {
         "title": "RailYatra Booking API",
-        "version": "1.2.0",
+        "version": "1.4.0",
         "description": (
             "Train seat booking and allotment. Read endpoints are open; "
             "write endpoints require the X-API-Token header."
@@ -133,6 +133,22 @@ SPEC = {
                 },
             }
         },
+        "/api/journeys": {
+            "get": {
+                "summary": "Connecting (one change) journeys between two cities",
+                "parameters": [
+                    {"name": "from", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "to", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10}},
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+                    {"name": "per_page", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+                ],
+                "responses": {
+                    "200": {"description": "Connecting journeys (paginated)"},
+                    "400": {"description": "Missing query parameters"},
+                },
+            }
+        },
         "/api/availability": {
             "get": {
                 "summary": "Seat availability and fare for a leg",
@@ -145,6 +161,46 @@ SPEC = {
                     {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"], "default": "GN"}},
                 ],
                 "responses": {"200": {"description": "Availability payload"}},
+            }
+        },
+        "/api/demand": {
+            "get": {
+                "summary": "Occupancy, demand label and surge price for a leg",
+                "parameters": [
+                    {"name": "train_id", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "cls", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "date", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+                    {"name": "from_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "to_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"], "default": "GN"}},
+                ],
+                "responses": {"200": {"description": "Demand payload with surge-applied dynamic fare"}},
+            }
+        },
+        "/api/availability/stream": {
+            "get": {
+                "summary": "Live availability as an SSE stream",
+                "description": (
+                    "text/event-stream of availability frames. 'frames' caps the "
+                    "number of updates per connection and 'interval' sets the delay."
+                ),
+                "parameters": [
+                    {"name": "train_id", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "cls", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "date", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+                    {"name": "from_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "to_seq", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "quota", "in": "query", "schema": {"type": "string", "enum": ["GN", "TQ", "PT", "LD", "SS", "DF", "DP"], "default": "GN"}},
+                    {"name": "interval", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 30, "default": 5}},
+                    {"name": "frames", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 120, "default": 10}},
+                ],
+                "responses": {"200": {"description": "SSE stream of availability frames"}},
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Process metrics and row counts",
+                "responses": {"200": {"description": "Uptime, request/error totals and table counts"}},
             }
         },
         "/api/seatmap": {
@@ -269,6 +325,49 @@ SPEC = {
                     "200": {"description": "Rescheduled with change fee"},
                     "400": {"description": "Validation error"},
                 },
+            }
+        },
+        "/api/chart/status": {
+            "get": {
+                "summary": "Whether a train's chart has been prepared for a date",
+                "parameters": [
+                    {"name": "train_id", "in": "query", "required": True, "schema": {"type": "integer"}},
+                    {"name": "date", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+                ],
+                "responses": {"200": {"description": "{train_id, date, prepared}"}},
+            }
+        },
+        "/api/chart/prepare": {
+            "post": {
+                "summary": "Prepare a chart: confirm RAC/waitlist and close booking",
+                "security": [{"ApiToken": []}],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["train_id", "date"],
+                                "properties": {
+                                    "train_id": {"type": "integer"},
+                                    "date": {"type": "string", "format": "date"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {"description": "Chart prepared; lists confirmed PNRs"},
+                    "400": {"description": "Validation error"},
+                    "401": {"description": "Missing or invalid token"},
+                },
+            }
+        },
+        "/api/chart/prepare-due": {
+            "post": {
+                "summary": "Prepare every chart that is due (near departure)",
+                "security": [{"ApiToken": []}],
+                "responses": {"200": {"description": "Charts prepared and PNRs confirmed"}},
             }
         },
     },
