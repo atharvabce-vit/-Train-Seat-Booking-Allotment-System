@@ -3,9 +3,26 @@ from datetime import date, datetime, timedelta, timezone
 DATE_FORMAT = "%Y-%m-%d"
 STAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+# Indian Standard Time never observes daylight saving, so a fixed UTC+5:30
+# offset is exact and avoids depending on a system tz database (which Windows
+# does not ship).
+IST = timezone(timedelta(hours=5, minutes=30), name="IST")
+
 
 def now_utc():
+    """Current instant in UTC - used for every stored timestamp."""
     return datetime.now(timezone.utc)
+
+
+def now_ist():
+    """Current instant in IST - used for journey and booking-window rules."""
+    return datetime.now(IST)
+
+
+def today_ist():
+    """The current calendar date in India, which is what a rail booking cares
+    about (a train that departs at 00:30 IST belongs to an IST day)."""
+    return now_ist().date()
 
 
 def now_str():
@@ -32,7 +49,7 @@ def parse_time(value):
 
 
 def booking_dates(days):
-    today = date.today()
+    today = today_ist()
     return [today + timedelta(days=offset) for offset in range(days + 1)]
 
 
