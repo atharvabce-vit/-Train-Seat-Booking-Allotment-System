@@ -8,6 +8,7 @@
 <div class="card">
     <h2>Add a train</h2>
     <form method="post" action="{{ url_for('admin.create_train') }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="key" value="{{ key }}">
         <div class="field">
             <label for="train_number">Train number</label>
