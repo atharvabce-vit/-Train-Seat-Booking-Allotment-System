@@ -34,14 +34,23 @@
         </ul>
     </div>
     <div class="card">
-        <h2>Allotted seats</h2>
-        <ul class="plain">
-            {% for seat in seats %}
-                <li>{{ seat.coach_name }} / {{ seat.seat_number }}
-                    <span class="muted">{{ berth_names.get(seat.berth_type, seat.berth_type) }}</span>
-                </li>
-            {% endfor %}
-        </ul>
+        {% if seats %}
+            <h2>Allotted seats</h2>
+            <ul class="plain">
+                {% for seat in seats %}
+                    <li>{{ seat.coach_name }} / {{ seat.seat_number }}
+                        <span class="muted">{{ berth_names.get(seat.berth_type, seat.berth_type) }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <h2>Seats</h2>
+            <p class="muted">
+                {{ seat_count }} {{ 'berth' if seat_count == 1 else 'berths' }} reserved for you.
+                Coach and berth numbers are allotted and shown on your e-ticket
+                <strong>after payment is confirmed</strong>.
+            </p>
+        {% endif %}
     </div>
 </div>
 
