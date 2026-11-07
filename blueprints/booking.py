@@ -21,6 +21,7 @@ from config import (
     DEFAULT_PAYMENT_METHOD,
     PAYMENT_METHODS,
     QUOTA_NAMES,
+    REVEAL_SEATS_BEFORE_PAYMENT,
 )
 from models import trains as trains_model
 from models import intelligence
@@ -268,6 +269,7 @@ def confirm(token):
         if len(seats) != len(session.get("hold_passengers", [])):
             flash("Your seat hold has expired. Please choose seats again.")
             return redirect(url_for("main.index"))
+        # The berth is held but not disclosed here; see REVEAL_SEATS_BEFORE_PAYMENT.
         train = trains_model.get_train(conn, hold["train_id"])
         distance = segment_distance(conn, hold["train_id"], hold["from_seq"], hold["to_seq"])
         ages = [p.get("age", 0) for p in session.get("hold_passengers", [])]
@@ -284,7 +286,8 @@ def confirm(token):
         "confirm.html",
         token=token,
         hold=dict(hold),
-        seats=seats,
+        seats=seats if REVEAL_SEATS_BEFORE_PAYMENT else None,
+        seat_count=len(seats),
         train=dict(train),
         distance=distance,
         fare=fare,
