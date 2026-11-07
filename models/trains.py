@@ -1,7 +1,9 @@
+import difflib
 from datetime import datetime, timedelta
 
 from config import (
     BOOKING_WINDOW_DAYS,
+    FUZZY_STATION_THRESHOLD,
     QUOTA_POOL,
     TATKAL_OPEN_HOUR_AC,
     TATKAL_OPEN_HOUR_NON_AC,
@@ -113,8 +115,9 @@ def segment_distance(conn, train_id, from_seq, to_seq):
 
 
 def search_stations(conn, query, limit=10):
-    pattern = f"%{(query or '').strip()}%"
-    return conn.execute(
+    query = (query or "").strip()
+    pattern = f"%{query}%"
+    rows = conn.execute(
         """
         SELECT code, name, city FROM stations
         WHERE city LIKE ? OR name LIKE ? OR code LIKE ?
@@ -123,6 +126,29 @@ def search_stations(conn, query, limit=10):
         """,
         (pattern, pattern, pattern, limit),
     ).fetchall()
+    if rows or not query:
+        return rows
+    return _fuzzy_stations(conn, query, limit)
+
+
+def _fuzzy_stations(conn, query, limit):
+    """Typo-tolerant fallback for when the exact LIKE search draws a blank.
+
+    Every station's code, name and city is scored against the query with a
+    character-similarity ratio; anything clearing the threshold is returned,
+    best match first. This is what turns ``mumbay`` into ``Mumbai``.
+    """
+    lowered = query.lower()
+    scored = []
+    for row in conn.execute("SELECT code, name, city FROM stations").fetchall():
+        ratio = max(
+            difflib.SequenceMatcher(None, lowered, row[field].lower()).ratio()
+            for field in ("code", "name", "city")
+        )
+        if ratio >= FUZZY_STATION_THRESHOLD:
+            scored.append((ratio, row))
+    scored.sort(key=lambda item: (-item[0], item[1]["city"], item[1]["name"]))
+    return [row for _, row in scored[:limit]]
 
 
 def search_trains(conn, from_query, to_query):
@@ -320,6 +346,16 @@ def is_bookable_date(travel_date):
         return False
     days_ahead = (day - today_ist()).days
     return 0 <= days_ahead <= BOOKING_WINDOW_DAYS
+
+
+def is_chart_prepared(conn, train_id, travel_date):
+    """True once the chart for this train and date has been finalised, after
+    which no fresh online booking is accepted."""
+    row = conn.execute(
+        "SELECT 1 FROM charts WHERE train_id = ? AND travel_date = ?",
+        (train_id, travel_date),
+    ).fetchone()
+    return row is not None
 
 
 def availability_calendar(conn, train_id, class_code, from_seq, to_seq, quota="GN", days=BOOKING_WINDOW_DAYS):
