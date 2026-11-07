@@ -4,11 +4,13 @@ from config import DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL,
-    email      TEXT    NOT NULL UNIQUE,
-    phone      TEXT,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    email         TEXT    NOT NULL UNIQUE,
+    phone         TEXT,
+    password_hash TEXT,
+    role          TEXT    NOT NULL DEFAULT 'passenger',
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS stations (
@@ -99,6 +101,9 @@ CREATE TABLE IF NOT EXISTS bookings (
     trip_type      TEXT    NOT NULL DEFAULT 'ONE_WAY'
                    CHECK (trip_type IN ('ONE_WAY', 'ROUND_TRIP')),
     change_count   INTEGER NOT NULL DEFAULT 0 CHECK (change_count >= 0),
+    -- Set when a caller supplies an Idempotency-Key, so a retried request
+    -- returns the original booking instead of creating a second one.
+    idempotency_key TEXT,
     booked_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     cancelled_at   TEXT,
     CHECK (to_seq > from_seq)
@@ -158,6 +163,8 @@ CREATE TABLE IF NOT EXISTS payments (
     status     TEXT    NOT NULL DEFAULT 'success'
                CHECK (status IN ('pending', 'success', 'failed')),
     txn_ref    TEXT    NOT NULL UNIQUE,
+    -- Lets a repeated charge with the same key return the first payment.
+    idempotency_key TEXT,
     paid_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -197,6 +204,16 @@ CREATE TABLE IF NOT EXISTS booking_changes (
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Finalised charts. A few hours before departure a train's chart is
+-- "prepared": whatever RAC/waitlisted bookings can be seated are confirmed,
+-- and from then on online booking for that train and date is closed.
+CREATE TABLE IF NOT EXISTS charts (
+    train_id    INTEGER NOT NULL REFERENCES trains(id) ON DELETE CASCADE,
+    travel_date TEXT    NOT NULL,
+    prepared_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (train_id, travel_date)
+);
+
 -- Simple audit trail for anything that moves money or seats.
 CREATE TABLE IF NOT EXISTS audit_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,6 +247,10 @@ CREATE INDEX IF NOT EXISTS idx_passengers_book    ON passengers(booking_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_book ON notifications(booking_id);
 CREATE INDEX IF NOT EXISTS idx_changes_booking    ON booking_changes(booking_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created      ON audit_log(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_idem ON bookings(idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_idem ON payments(idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 """
 
 
