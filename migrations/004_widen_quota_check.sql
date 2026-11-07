@@ -26,12 +26,21 @@ CREATE TABLE bookings_new (
     trip_type      TEXT    NOT NULL DEFAULT 'ONE_WAY'
                    CHECK (trip_type IN ('ONE_WAY', 'ROUND_TRIP')),
     change_count   INTEGER NOT NULL DEFAULT 0 CHECK (change_count >= 0),
+    idempotency_key TEXT,
     booked_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     cancelled_at   TEXT,
     CHECK (to_seq > from_seq)
 );
 
-INSERT INTO bookings_new SELECT * FROM bookings;
+INSERT INTO bookings_new (
+    id, pnr, user_id, train_id, class_code, travel_date, from_seq, to_seq,
+    quota, status, queue_position, distance_km, total_fare, concession_amount,
+    group_id, trip_type, change_count, idempotency_key, booked_at, cancelled_at
+) SELECT
+    id, pnr, user_id, train_id, class_code, travel_date, from_seq, to_seq,
+    quota, status, queue_position, distance_km, total_fare, concession_amount,
+    group_id, trip_type, change_count, idempotency_key, booked_at, cancelled_at
+FROM bookings;
 
 DROP TABLE bookings;
 
