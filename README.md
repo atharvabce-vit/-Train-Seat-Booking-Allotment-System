@@ -10,9 +10,10 @@ calendar and an interactive seat map are all supported, and the whole thing is
 also exposed over a **JSON REST API** (token-protected, documented with OpenAPI)
 with an **admin dashboard**.
 
-Deliberately out of scope: a real payment gateway (payments are mocked),
-login/auth (a name + e-mail identifies the booker), real chart preparation, and
-distributed locks — concurrency is handled by SQLite write transactions.
+Deliberately out of scope: a real payment gateway (there is a sandbox gateway
+that declines cards ending `0000`), real chart preparation beyond a recorded
+"chart prepared" flag, and distributed locks — concurrency is handled by SQLite
+write transactions.
 
 ## 1. Feature overview
 
@@ -20,6 +21,12 @@ distributed locks — concurrency is handled by SQLite write transactions.
 | --- | --- |
 | Part-route booking | Seats are tracked per *leg* `[from_seq, to_seq)`, so the same physical seat can be sold to different passengers on non-overlapping segments. |
 | Station search | 26 stations; search any city/station pair that a train actually halts at, not just the endpoints. |
+| Typo-tolerant search | When a query finds nothing, stations are re-ranked by character similarity, so `mumbay` still resolves to Mumbai. |
+| Accounts & sessions | Register / sign in (PBKDF2-SHA256 passwords) and book as a logged-in user; guest checkout still works with just a name + e-mail. |
+| Sandbox payments | Payments go through a `RAILYATRA-SANDBOX` gateway (`MOCK`/`UPI`/`CARD`/`NETBANKING`); any card ending `0000` is declined. |
+| Idempotent booking | Supplying an `Idempotency-Key` (header or hold token) makes a retried booking/payment return the original PNR instead of double-charging. |
+| Demand intelligence | Per-leg occupancy drives a demand label and a surge multiplier (`/api/demand`) shown on the booking page. |
+| Waitlist prediction | A queue-position *and* days-left aware estimate of how likely an RAC/waitlist ticket is to confirm. |
 | Distance-based fare | `base(class) + per_km(class) × km` over the travelled leg, with a Tatkal premium. |
 | Concessions & child fares | Age-based discount: infant (≤4) 100%, child (≤11) 50%, senior (≥58) 30% — applied per passenger. |
 | Round-trip booking | Book outbound + return in one go; both share a `group_id` and the return leg gets a 5% discount. Outbound auto-cancels if the return fails. |
@@ -37,6 +44,8 @@ distributed locks — concurrency is handled by SQLite write transactions.
 | PDF + QR ticket | `reportlab` PDF with a `qrcode` QR pointing at the public verify URL. |
 | My Bookings | Every booking for an e-mail address in one list. |
 | Notifications outbox | Mocked e-mail/SMS rows are queued for every confirm/cancel/promote. |
+| Live availability (SSE) | `/api/availability/stream` pushes availability frames over `text/event-stream` for a leg. |
+| Metrics | `/metrics` reports uptime, request/error totals and table row counts. |
 | REST API | JSON search / availability / seatmap / book / round-trip / reschedule / PNR / cancel under `/api`, protected by API tokens + rate limiting. |
 | OpenAPI / Swagger | Machine-readable OpenAPI 3.0 spec served at `/api/openapi.json`. |
 | Admin dashboard | Counts, revenue, refunds, class/quota split, top routes, occupancy (with bar charts), concessions, recent activity, queue snapshot. |
@@ -54,6 +63,7 @@ train-booking-system/
 ├── config.py               # DB path, fares, quotas, refund rules, limits
 ├── db.py                   # get_connection() + full SQL schema (create_tables)
 ├── migrate.py              # forward-only migration runner (schema_migrations)
+├── metrics.py              # in-process request/error counters for /metrics
 ├── openapi.py              # OpenAPI 3.0 spec served at /api/openapi.json
 ├── seed.py                 # stations, 10 realistic multi-stop trains, coaches/seats
 ├── app.py                  # create_app() app factory + logging + /healthz
@@ -62,6 +72,7 @@ train-booking-system/
 │   ├── main.py             # /, /search, /stations, /schedule/<id>
 │   ├── booking.py          # /book, /confirm, /ticket(+.ics), /pnr, /my-bookings,
 │   │                       # /cancel, /cancel-passengers, /reschedule, /round-trip
+│   ├── auth.py             # /register, /login, /logout
 │   ├── api.py              # /api/... JSON endpoints + /api/docs
 │   └── admin.py            # /admin dashboard, CRUD, audit log, CSV exports, backup
 ├── models/
@@ -72,6 +83,9 @@ train-booking-system/
 │   ├── reports.py          # admin aggregates (occupancy, concessions)
 │   ├── audit.py            # audit-log writes + recent()
 │   ├── api_auth.py         # API tokens + sliding-window rate limit
+│   ├── intelligence.py     # demand index/surge pricing + waitlist prediction
+│   ├── auth.py             # password hashing + register/authenticate
+│   ├── payments.py         # sandbox gateway (charge) + idempotency keys
 │   ├── cache.py            # small TTL response cache
 │   ├── notifications.py    # mocked e-mail/SMS outbox
 │   └── util.py             # date/time helpers
@@ -286,6 +300,33 @@ change_fee = MAX(RESCHEDULE_FEE_MIN, ROUND(paid_fare * RESCHEDULE_FEE_PCT / 100)
 - Tatkal (`TQ`) bookings only open in the last `TATKAL_WINDOW_HOURS` (24) hours
   before departure; a coach's first `tatkal_seats` seat numbers are the TQ quota.
 
+### Demand & waitlist model (`models/intelligence.py`)
+
+Occupancy drives a demand index and a surge multiplier (the first ceiling the
+index clears wins):
+
+```
+demand_index = (total_seats - available) / total_seats        # 0.0 – 1.0
+surge_multiplier(index) = 1.00  if index ≤ 0.50
+                        = 1.05  if index ≤ 0.75
+                        = 1.15  if index ≤ 0.90
+                        = 1.25  otherwise
+dynamic_fare(base, index) = ROUND(base * surge_multiplier(index))
+```
+
+`demand_label(index)` buckets the same index into *Available / Filling fast /
+High demand / Very high demand* for the UI.
+
+An RAC/waitlist ticket's chance of confirming (`waitlist_confidence`) starts from
+the queue position (RAC barely tapers, waitlist falls fast) and is nudged by how
+many days are still left: ≥7 days is a tailwind, a departure tomorrow a headwind.
+
+```
+rac:     base = clamp(97 - (position-1)*3, min=55)   waiting: base = clamp(72 - position*4, min=1)
+days_left ≥ 7 → +8 ; ≥ 3 → +4 ; ≤ 1 → -10
+result = clamp(base, 0, 99)
+```
+
 ## 8. Configuration (`config.py`)
 
 | Setting | Value |
@@ -309,6 +350,9 @@ change_fee = MAX(RESCHEDULE_FEE_MIN, ROUND(paid_fare * RESCHEDULE_FEE_PCT / 100)
 | `DEFAULT_API_TOKEN` | `demo-token-123` |
 | `LOG_LEVEL` | `INFO` |
 | `ADMIN_KEY` | `railyatra-admin` (admin dashboard `?key=`) |
+| `DEFAULT_PAYMENT_METHOD` / `PAYMENT_METHODS` | `MOCK` / MOCK, UPI, CARD, NETBANKING |
+| `CHART_LEAD_HOURS` | 4 (chart prepared this many hours before departure) |
+| `FUZZY_STATION_THRESHOLD` | 0.6 (typo-tolerant station search) |
 
 Run on a custom port with the `PORT` environment variable (default `5000`), e.g.
 `set PORT=5001 && python app.py`.
@@ -324,16 +368,23 @@ token. The full machine-readable spec is at `/api/openapi.json`.
 | GET | `/api/stations?q=` | Station autocomplete |
 | GET | `/api/trains` | All trains with endpoints |
 | GET | `/api/search?from=&to=` | Trains between two cities |
-| GET | `/api/availability?train_id=&cls=&date=&from_seq=&to_seq=&quota=` | Seat counts |
+| GET | `/api/journeys?from=&to=` | Connecting (one change) journeys |
+| GET | `/api/availability?train_id=&cls=&date=&from_seq=&to_seq=&quota=` | Seat counts + demand label |
+| GET | `/api/demand?train_id=&cls=&date=&from_seq=&to_seq=&quota=` | Occupancy, demand label, surge price |
+| GET | `/api/availability/stream?train_id=&cls=&date=&from_seq=&to_seq=&frames=&interval=` | SSE live availability |
 | GET | `/api/seatmap?train_id=&cls=&date=&from_seq=&to_seq=&quota=` | Per-seat map (free/booked) |
 | POST | `/api/book` | Create a booking (JSON body) → 201 with `pnr`/`status` |
 | POST | `/api/book-round-trip` | Book outbound + return together → 201 with both PNRs |
 | POST | `/api/reschedule/<pnr>` | Move a confirmed booking to a new date/leg |
 | GET | `/api/pnr/<pnr>` | PNR details (404 if unknown) |
 | POST | `/api/cancel/<pnr>` | Cancel + refund → promoted PNRs |
+| GET | `/api/chart/status?train_id=&date=` | Whether a chart has been prepared |
+| POST | `/api/chart/prepare` | Prepare a chart: confirm RAC/waitlist, close booking |
+| POST | `/api/chart/prepare-due` | Prepare every chart that is due |
 | GET | `/api/openapi.json` | OpenAPI 3.0 document |
 | GET | `/api/docs` | Human-readable API reference page |
 | GET | `/healthz` | Health check |
+| GET | `/metrics` | Uptime, request/error totals and table row counts |
 
 Inside the JSON body the class field is named `"class"` (e.g. `{"class": "SL"}`),
 while query strings use `cls=` (`class` is a Python reserved word).
@@ -361,6 +412,12 @@ tests/test_booking_flow.py  # hold→confirm, expired hold, waitlist promotion, 
 tests/test_fare.py          # distance fare, tatkal premium, refund tiers, segment km
 tests/test_api.py           # JSON API + rendered pages + admin key + tokens + OpenAPI
 tests/test_advanced.py      # concessions, partial cancel, reschedule, round-trip, audit
+tests/test_auth.py          # password hashing, register/login/logout flow
+tests/test_payments.py      # sandbox charge, idempotency, card decline
+tests/test_chart.py         # chart preparation + due charts
+tests/test_itinerary.py     # connecting (one change) journey search
+tests/test_intelligence.py  # typo-tolerant search, demand surge, waitlist prediction
+tests/test_ops.py           # /metrics, /api/demand, SSE availability stream
 ```
 
 Run everything with `py -m pytest -q` (Windows) or `pytest -q`.
