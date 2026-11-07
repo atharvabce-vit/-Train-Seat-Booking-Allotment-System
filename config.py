@@ -10,6 +10,26 @@ CLASS_NAMES = {
 QUOTA_NAMES = {
     "GN": "General",
     "TQ": "Tatkal",
+    "PT": "Premium Tatkal",
+    "LD": "Ladies",
+    "SS": "Senior Citizen",
+    "DF": "Divyangjan",
+    "DP": "Duty Pass",
+}
+
+# Every quota draws its seats from one of the two physical pools a coach
+# carries: the General pool (every seat that is not a Tatkal seat) or the
+# Tatkal pool (the first `tatkal_seats` numbers of the coach). Keeping the
+# mapping in one place lets the like-named logical quotas (Ladies, Senior
+# Citizen, Premium Tatkal) reuse the existing seat inventory untouched.
+QUOTA_POOL = {
+    "GN": "GN",
+    "LD": "GN",
+    "SS": "GN",
+    "DF": "GN",
+    "DP": "GN",
+    "TQ": "TQ",
+    "PT": "TQ",
 }
 
 BERTH_NAMES = {
@@ -38,13 +58,38 @@ PER_KM_RATE = {
     "1A": 1.90,
 }
 
+# Distance is charged through telescopic slabs, the way the real fare tables
+# work: the first 100 km cost the full per-km rate, the next slab a little
+# less, and so on, so the marginal cost of a kilometre falls with distance.
+DISTANCE_SLABS = [
+    (100, 1.00),
+    (300, 0.85),
+    (500, 0.70),
+    (1000, 0.55),
+    (float("inf"), 0.45),
+]
+
+# Flat charges added to every ticket, per class.
+RESERVATION_CHARGE = {"SL": 20, "3A": 40, "2A": 50, "1A": 60}
+SUPERFAST_CHARGE = {"SL": 30, "3A": 45, "2A": 45, "1A": 45}
+
+# GST is levied on air-conditioned classes only (sleeper is exempt).
+GST_PCT = {"SL": 0, "3A": 5, "2A": 5, "1A": 5}
+
 MAX_PASSENGERS_PER_PNR = 6
 
-BOOKING_WINDOW_DAYS = 30
+# Advance Reservation Period - how far ahead a journey can be booked.
+BOOKING_WINDOW_DAYS = 60
 
 TATKAL_PREMIUM_PCT = 30
 
-TATKAL_WINDOW_HOURS = 24
+# Premium Tatkal is priced dynamically and carries a steeper premium.
+PREMIUM_TATKAL_PREMIUM_PCT = 50
+
+# Tatkal booking opens on the previous day at 10:00 IST for AC classes and
+# 11:00 IST for non-AC classes, and stays open until the train departs.
+TATKAL_OPEN_HOUR_AC = 10
+TATKAL_OPEN_HOUR_NON_AC = 11
 
 SENIOR_AGE = 58
 
@@ -82,6 +127,11 @@ REFUND_RULES = [
     (4, 25),
     (0, 0),
 ]
+
+# Flat clerkage retained per passenger when an RAC or waitlisted ticket is
+# cancelled - these never had a confirmed seat, so the fare is refunded in
+# full minus this charge instead of the percentage ladder above.
+CLERKAGE_PER_PASSENGER = 60
 
 ADMIN_KEY = "railyatra-admin"
 
