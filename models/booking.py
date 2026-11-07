@@ -2,9 +2,11 @@ import secrets
 from datetime import timedelta
 
 from config import (
+    CLERKAGE_PER_PASSENGER,
     DEFAULT_PAYMENT_METHOD,
     HOLD_TTL_SECONDS,
     MAX_PASSENGERS_PER_PNR,
+    QUOTA_NAMES,
     RAC_LIMIT,
     RESCHEDULE_FEE_MIN,
     RESCHEDULE_FEE_PCT,
@@ -14,15 +16,16 @@ from config import (
 from models import audit, notifications
 from models.fare import (
     calculate_fare_with_concessions,
-    fare_per_passenger,
     refund_amount,
 )
 from models.pnr import generate_pnr
 from models.trains import (
     available_seats,
+    get_train,
     hours_before_departure,
     is_bookable_date,
     quota_seat_count,
+    runs_on_date,
     segment_distance,
     tatkal_open,
 )
@@ -138,7 +141,19 @@ def _normalise_passengers(passengers):
     return cleaned
 
 
+def validate_quota_eligibility(quota, passengers):
+    """Enforce the passenger rules that apply to the special quotas."""
+    if quota == "LD":
+        if not all(p["gender"] == "F" or int(p["age"]) <= 11 for p in passengers):
+            raise BookingError("Ladies quota is only for female passengers (and children up to 11).")
+    elif quota == "SS":
+        if not any(int(p["age"]) >= SENIOR_AGE for p in passengers):
+            raise BookingError(f"Senior Citizen quota needs at least one passenger aged {SENIOR_AGE} or above.")
+
+
 def validate_party(conn, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers):
+    if quota not in QUOTA_NAMES:
+        raise BookingError("Choose a valid quota.")
     if not passengers:
         raise BookingError("At least one passenger is required.")
     if len(passengers) > MAX_PASSENGERS_PER_PNR:
@@ -150,10 +165,20 @@ def validate_party(conn, train_id, class_code, travel_date, from_seq, to_seq, qu
         raise BookingError("Choose a valid boarding and destination station.")
     if not is_bookable_date(travel_date):
         raise BookingError("The travel date is outside the booking window.")
+
+    train = get_train(conn, train_id)
+    if train is None:
+        raise BookingError("Train not found.")
+    if not runs_on_date(train["runs_on"], travel_date):
+        raise BookingError("This train does not run on the selected date.")
+    if hours_before_departure(conn, train_id, travel_date, from_seq) <= 0:
+        raise BookingError("This train has already departed from the boarding station.")
+
     if quota_seat_count(conn, train_id, class_code, quota) == 0:
         raise BookingError("This class is not available on the selected train.")
-    if quota == "TQ" and not tatkal_open(conn, train_id, travel_date, from_seq):
-        raise BookingError("Tatkal booking opens 24 hours before departure.")
+    if quota in ("TQ", "PT") and not tatkal_open(conn, train_id, travel_date, from_seq, class_code):
+        raise BookingError("Tatkal booking opens the previous day at 10:00/11:00 IST.")
+    validate_quota_eligibility(quota, passengers)
 
 
 def create_hold(conn, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers):
@@ -236,15 +261,16 @@ def confirm_booking(conn, user_id, token, passengers, method=DEFAULT_PAYMENT_MET
         distance = segment_distance(conn, train_id, hold["from_seq"], hold["to_seq"])
 
         ages = [passenger["age"] for passenger in passengers]
-        base_total, _, breakdown = calculate_fare_with_concessions(
+        _, waived, breakdown = calculate_fare_with_concessions(
             class_code, distance, quota, ages
         )
         if discount_pct:
             for item in breakdown:
                 item["fare"] = int(round(item["fare"] * (100 - discount_pct) / 100))
         total_fare = sum(item["fare"] for item in breakdown)
-        full_base = fare_per_passenger(class_code, distance, quota) * len(passengers)
-        concession_amount = max(0, full_base - total_fare)
+        # concession_amount reflects only age-based waivers; the round-trip
+        # discount is tracked separately through the discounted fares.
+        concession_amount = max(0, waived)
 
         pnr = generate_pnr(conn)
 
@@ -349,11 +375,10 @@ def join_queue(conn, user_id, train_id, class_code, travel_date, from_seq, to_se
 
         distance = segment_distance(conn, train_id, from_seq, to_seq)
         ages = [passenger["age"] for passenger in passengers]
-        total_fare, _, breakdown = calculate_fare_with_concessions(
+        total_fare, waived, breakdown = calculate_fare_with_concessions(
             class_code, distance, quota, ages
         )
-        full_base = fare_per_passenger(class_code, distance, quota) * len(passengers)
-        concession_amount = max(0, full_base - total_fare)
+        concession_amount = max(0, waived)
         pnr = generate_pnr(conn)
         cursor = conn.execute(
             """
@@ -395,6 +420,24 @@ def join_queue(conn, user_id, train_id, class_code, travel_date, from_seq, to_se
         conn.execute("ROLLBACK")
         raise
 
+
+
+def confirmation_probability(booking):
+    """A rough 0-100 chance that an RAC/waitlisted booking ends up confirmed.
+
+    RAC tickets almost always get a berth and only taper as the RAC position
+    grows; waitlisted tickets depend far more on other passengers cancelling,
+    so their odds fall away much faster with the queue position.
+    """
+    status = booking["status"]
+    if status == "confirmed":
+        return 100
+    if status == "cancelled":
+        return 0
+    position = booking["queue_position"] or 1
+    if status == "rac":
+        return max(50, 95 - (position - 1) * 3)
+    return max(1, 70 - position * 4)
 
 
 def _booking_passengers(conn, booking_id):
@@ -492,6 +535,21 @@ def promote_queue(conn, train_id, class_code, travel_date, quota):
     return promoted
 
 
+def _refund_for_cancellation(booking, fare, passenger_count, hours):
+    """Return (amount, percent, reason) for cancelling part or all of a booking.
+
+    Confirmed tickets follow the time-based refund ladder; RAC and waitlisted
+    tickets never held a confirmed seat, so their fare comes back in full less
+    a flat clerkage per passenger.
+    """
+    if booking["status"] == "confirmed":
+        amount, percent = refund_amount(fare, hours)
+        return amount, percent, f"Cancelled {hours:.0f} hours before departure"
+    amount = max(0, fare - CLERKAGE_PER_PASSENGER * passenger_count)
+    percent = int(round(amount / fare * 100)) if fare else 0
+    return amount, percent, f"RAC/waitlist clerkage INR {CLERKAGE_PER_PASSENGER}/passenger"
+
+
 def cancel_booking(conn, pnr):
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -510,17 +568,20 @@ def cancel_booking(conn, pnr):
             "UPDATE seat_inventory SET status = 'cancelled' WHERE booking_id = ?", (booking["id"],)
         )
 
-        refund = None
-        if booking["status"] == "confirmed":
-            hours = hours_before_departure(
-                conn, booking["train_id"], booking["travel_date"], booking["from_seq"]
-            )
-            amount, percent = refund_amount(booking["total_fare"], hours)
-            conn.execute(
-                "INSERT INTO refunds (booking_id, percent, amount, reason) VALUES (?, ?, ?, ?)",
-                (booking["id"], percent, amount, f"Cancelled {hours:.0f} hours before departure"),
-            )
-            refund = {"percent": percent, "amount": amount}
+        hours = hours_before_departure(
+            conn, booking["train_id"], booking["travel_date"], booking["from_seq"]
+        )
+        passenger_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM passengers WHERE booking_id = ?", (booking["id"],)
+        ).fetchone()["c"]
+        amount, percent, reason = _refund_for_cancellation(
+            booking, booking["total_fare"], passenger_count, hours
+        )
+        conn.execute(
+            "INSERT INTO refunds (booking_id, percent, amount, reason) VALUES (?, ?, ?, ?)",
+            (booking["id"], percent, amount, reason),
+        )
+        refund = {"percent": percent, "amount": amount}
 
         contact = conn.execute(
             "SELECT email, phone FROM users WHERE id = ?", (booking["user_id"],)
@@ -529,7 +590,7 @@ def cancel_booking(conn, pnr):
             conn, booking["id"], contact["email"],
             f"Booking cancelled - PNR {pnr}",
             f"Booking {pnr} has been cancelled."
-            + (f" Refund of INR {refund['amount']} ({refund['percent']}%) initiated." if refund else ""),
+            f" Refund of INR {refund['amount']} ({refund['percent']}%) initiated.",
         )
 
         promoted = promote_queue(
@@ -538,7 +599,7 @@ def cancel_booking(conn, pnr):
         )
         audit.log(
             conn, "cancel", "booking", pnr,
-            f"fare {booking['total_fare']}, refund {refund['amount'] if refund else 0}, "
+            f"fare {booking['total_fare']}, refund {refund['amount']}, "
             f"promoted {len(promoted)}",
         )
         conn.execute("COMMIT")
@@ -580,13 +641,12 @@ def cancel_passengers(conn, pnr, passenger_ids):
         hours = hours_before_departure(
             conn, booking["train_id"], booking["travel_date"], booking["from_seq"]
         )
-        amount, percent = refund_amount(cancelled_fare, hours)
+        amount, percent, reason = _refund_for_cancellation(
+            booking, cancelled_fare, len(target), hours
+        )
         conn.execute(
             "INSERT INTO refunds (booking_id, percent, amount, reason) VALUES (?, ?, ?, ?)",
-            (
-                booking["id"], percent, amount,
-                f"{len(target)} passenger(s) cancelled {hours:.0f} hours before departure",
-            ),
+            (booking["id"], percent, amount, reason),
         )
 
         fully_cancelled = not remaining
