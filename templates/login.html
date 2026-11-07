@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<h1>Sign In</h1>
+
+<form class="card search-form" method="post" action="{{ url_for('auth.login') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email" required autocomplete="email">
+    </div>
+    <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+    </div>
+    <button type="submit">Sign in</button>
+</form>
+
+<p class="muted">No account yet? <a href="{{ url_for('auth.register') }}">Create one</a>.</p>
+{% endblock %}
