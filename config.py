@@ -146,3 +146,9 @@ PAYMENT_METHODS = ["MOCK", "UPI", "CARD", "NETBANKING"]
 # Typo-tolerant station search kicks in only after the exact query finds
 # nothing; 0.6 tolerates a transposition or a missing vowel (mumbay -> Mumbai).
 FUZZY_STATION_THRESHOLD = 0.6
+
+# The exact berth is withheld from the booker until the booking is paid for.
+# Showing it at the payment step lets someone cancel and re-hold repeatedly to
+# map out (and game) the seat-allotment pattern, so we keep it hidden there and
+# reveal it only on the confirmed e-ticket.
+REVEAL_SEATS_BEFORE_PAYMENT = False
