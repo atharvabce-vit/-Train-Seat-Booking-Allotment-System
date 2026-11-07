@@ -29,6 +29,7 @@ from models.booking import (
     book_round_trip,
     cancel_booking,
     cancel_passengers,
+    confirmation_probability,
     confirm_booking,
     create_hold,
     get_hold,
@@ -142,7 +143,9 @@ def book():
         if selected_class not in [c["code"] for c in classes]:
             selected_class = classes[0]["code"] if classes else ""
 
-        tatkal_open = trains_model.tatkal_open(conn, train_id, travel_date, from_seq)
+        tatkal_open = trains_model.tatkal_open(
+            conn, train_id, travel_date, from_seq, selected_class or "SL"
+        )
 
         calendar = []
         for day in booking_dates(BOOKING_WINDOW_DAYS):
@@ -194,6 +197,7 @@ def create_booking_hold():
     to_seq = form.get("to_seq", type=int)
     quota = form.get("quota", "GN").upper()
     method = form.get("payment_method", DEFAULT_PAYMENT_METHOD)
+    only_confirmed = form.get("only_confirmed") == "1"
     user_name = form.get("user_name", "").strip()
     user_email = form.get("user_email", "").strip()
     user_phone = form.get("user_phone", "").strip()
@@ -220,6 +224,9 @@ def create_booking_hold():
                 conn, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers
             )
         except NoSeatsError:
+            if only_confirmed:
+                flash("No confirmed seats are free and you asked for a confirmed-only booking.")
+                return redirect(back)
             pnr, status, position = join_queue(
                 conn, user_id, train_id, class_code, travel_date, from_seq, to_seq, quota, passengers
             )
@@ -402,11 +409,13 @@ def pnr_status():
     pnr = request.args.get("pnr", "").strip()
     record = None
     stops = []
+    probability = None
     if pnr:
         with db() as conn:
             record = get_booking_by_pnr(conn, pnr)
             if record is not None:
                 stops = [dict(s) for s in trains_model.get_stops(conn, record["booking"]["train_id"])]
+                probability = confirmation_probability(record["booking"])
         if record is None:
             flash("No booking found for this PNR.")
     return render_template(
@@ -414,6 +423,7 @@ def pnr_status():
         record=record,
         pnr=pnr,
         stops=stops,
+        probability=probability,
         dates=[d.strftime(DATE_FORMAT) for d in booking_dates(BOOKING_WINDOW_DAYS)],
         class_names=CLASS_NAMES,
         berth_names=BERTH_NAMES,
