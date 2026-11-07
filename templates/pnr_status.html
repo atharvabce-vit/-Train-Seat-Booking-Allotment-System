@@ -23,11 +23,15 @@
         </p>
         {% if b.status in ('rac', 'waiting') %}
             <p>Queue position: <strong>{{ b.queue_position }}</strong></p>
+            {% if probability is not none %}
+                <p>Chances of confirmation: <strong>{{ probability }}%</strong></p>
+            {% endif %}
         {% endif %}
 
         {% if b.status != 'cancelled' %}
             <form method="post" action="{{ url_for('booking.cancel_selected', pnr=b.pnr) }}"
                   onsubmit="return confirm('Cancel the selected passengers?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <table class="data">
                     <thead><tr><th></th><th>#</th><th>Name</th><th>Age</th><th>Coach</th><th>Seat</th><th>Berth</th><th>Fare</th><th>Status</th></tr></thead>
                     <tbody>
@@ -82,6 +86,7 @@
                 <button type="button" class="button ghost" onclick="document.getElementById('reschedule').scrollIntoView();">Change date</button>
                 <form method="post" action="{{ url_for('booking.cancel', pnr=b.pnr) }}" class="inline"
                       onsubmit="return confirm('Cancel this booking?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="danger">Cancel booking</button>
                 </form>
             {% endif %}
@@ -93,6 +98,7 @@
             <h2>Reschedule this booking</h2>
             <p class="muted">Move a confirmed ticket to another date. A change fee of 10% (minimum Rs 50) applies.</p>
             <form method="post" action="{{ url_for('booking.reschedule', pnr=b.pnr) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field">
                     <label for="new_date">New travel date</label>
                     <select id="new_date" name="new_date" required>
