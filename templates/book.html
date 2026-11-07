@@ -56,11 +56,12 @@
     <button type="submit" class="ghost">Update availability</button>
 </form>
 
-{% if quota == 'TQ' and not tatkal_open %}
-    <div class="flash"><p>Tatkal booking opens only 24 hours before departure for this train.</p></div>
+{% if quota in ('TQ', 'PT') and not tatkal_open %}
+    <div class="flash"><p>Tatkal booking opens the previous day at 10:00 IST (AC classes) or 11:00 IST (non-AC).</p></div>
 {% endif %}
 
 <form method="post" action="{{ url_for('booking.create_booking_hold') }}" id="booking-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="train_id" value="{{ train.id }}">
     <input type="hidden" name="travel_date" value="{{ travel_date }}">
     <input type="hidden" name="from_seq" value="{{ from_seq }}">
@@ -156,6 +157,12 @@
                     <option value="{{ method }}" {% if method == default_method %}selected{% endif %}>{{ method }}</option>
                 {% endfor %}
             </select>
+        </div>
+        <div class="field">
+            <label>
+                <input type="checkbox" name="only_confirmed" value="1">
+                Book only if a confirmed seat is free (skip RAC / waitlist)
+            </label>
         </div>
     </div>
 
